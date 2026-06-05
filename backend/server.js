@@ -5,26 +5,17 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
-
-// Serve frontend
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Routes
-app.use('/api/auth',    require('./routes/auth'));
-app.use('/api/entries', require('./routes/entries'));
+app.use('/api/auth',     require('./routes/auth'));
+app.use('/api/entries',  require('./routes/entries'));
+app.use('/api/settings', require('./routes/settings'));
 
-// Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
 
-// Fallback to frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
-});
-
-// Connect MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('MongoDB connected');

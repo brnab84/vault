@@ -1,17 +1,23 @@
 const mongoose = require('mongoose');
 
 const entrySchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  name:   { type: String, required: true },
-  cat:    { type: String, enum: ['server','web','db','vpn','other'], default: 'other' },
-  ip:     String,
-  port:   String,
-  user:   String,
-  // password stored AES-256 encrypted (encrypted client-side before sending)
+  userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  name:          { type: String, required: true },
+  cat:           { type: String, default: 'other' },
+  ip:            String,
+  port:          String,
+  user:          String,
   passEncrypted: String,
-  url:    String,
-  tags:   [String],
-  notes:  String,
+  url:           String,
+  tags:          [String],
+  notes:         String,
+  // custom fields per entry: [{key, valueEncrypted}]
+  customFields:  [{
+    key:            { type: String, required: true },
+    label:          String,
+    valueEncrypted: String,
+    isPassword:     { type: Boolean, default: false }
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Entry', entrySchema);
