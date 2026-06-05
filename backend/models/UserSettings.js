@@ -28,7 +28,11 @@ const userSettingsSchema = new mongoose.Schema({
       { id: 'other',  label: 'Otro',           icon: 'other',   color: '#888888', builtIn: true }
     ]
   },
-  customFields: { type: [customFieldSchema], default: [] }
+  customFields: { type: [customFieldSchema], default: [] },
+  fieldOrder: { type: [{
+    key:     { type: String, required: true },
+    visible: { type: Boolean, default: true }
+  }], default: [] }
 }, { timestamps: true });
 
 module.exports = mongoose.model('UserSettings', userSettingsSchema);

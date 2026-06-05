@@ -30,14 +30,16 @@ router.put('/categories', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT update custom fields
+// PUT update custom fields + optional fieldOrder
 router.put('/fields', async (req, res) => {
   try {
-    const { customFields } = req.body;
+    const { customFields, fieldOrder } = req.body;
     if (!Array.isArray(customFields)) return res.status(400).json({ error: 'customFields debe ser array' });
+    const update = { customFields };
+    if (Array.isArray(fieldOrder)) update.fieldOrder = fieldOrder;
     const settings = await UserSettings.findOneAndUpdate(
       { userId: req.user.id },
-      { customFields },
+      update,
       { new: true, upsert: true }
     );
     res.json(settings);
