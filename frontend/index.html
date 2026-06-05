@@ -439,6 +439,7 @@ function getCat(id) {
 
 function renderCatNav() {
   const nav = document.getElementById('catNav');
+  if (!nav) return;
   const allCount = entries.length;
   let html = `<div class="nav-item ${activeCat==='all'?'active':''}" data-cat="all" onclick="setCat(this)">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z"/></svg>
@@ -454,6 +455,7 @@ function renderCatNav() {
 
 function renderCategorySelect() {
   const sel = document.getElementById('f_cat');
+  if (!sel) return;
   const cur = sel.value;
   sel.innerHTML = settings.categories.map(c=>`<option value="${c.id}">${esc(c.label)}</option>`).join('');
   if (cur) sel.value = cur;
@@ -467,14 +469,16 @@ function setCat(el) {
 }
 
 function renderEntries() {
-  const q=(document.getElementById('searchInput').value||'').toLowerCase();
+  const grid=document.getElementById('entriesGrid');
+  if(!grid) return;
+  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
   const list=entries.filter(e=>{
     const catOk=activeCat==='all'||e.cat===activeCat;
     const searchOk=!q||[e.name,e.ip,e.user,e.url,e.notes,...(e.tags||[])].some(v=>v&&v.toLowerCase().includes(q));
     return catOk&&searchOk;
   });
-  document.getElementById('statsChip').textContent=list.length+' entrada'+(list.length!==1?'s':'');
-  const grid=document.getElementById('entriesGrid');
+  const chip=document.getElementById('statsChip');
+  if(chip) chip.textContent=list.length+' entrada'+(list.length!==1?'s':'');
   if(!list.length){grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><p>Sin entradas</p></div>`;return;}
   grid.innerHTML=list.map(e=>{
     const ri=entries.indexOf(e);
