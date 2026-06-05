@@ -257,6 +257,39 @@
     overflow-y: auto;
   }
 
+
+  /* ─── DRAG & DROP FIELDS ─── */
+  .draggable-field {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+    cursor: default; transition: all .15s; user-select: none;
+  }
+  .draggable-field.dragging {
+    opacity: .4; border-style: dashed;
+  }
+  .draggable-field.drag-over {
+    border-color: var(--accent); background: rgba(79,143,255,0.07);
+  }
+  .drag-handle {
+    cursor: grab; color: var(--text3); display: flex; align-items: center; flex-shrink: 0;
+  }
+  .drag-handle:active { cursor: grabbing; }
+  .field-info { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .field-visibility {
+    width: 32px; height: 18px; border-radius: 9px;
+    background: var(--bg4); position: relative; cursor: pointer;
+    border: 1px solid var(--border); transition: background .2s; flex-shrink: 0;
+  }
+  .field-visibility.on { background: var(--accent); border-color: var(--accent); }
+  .field-visibility::after {
+    content: ''; position: absolute; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--text2);
+    top: 2px; left: 2px; transition: all .2s;
+  }
+  .field-visibility.on::after { left: 16px; background: #fff; }
+  .form-field-wrap { transition: order .2s; }
+
 </style>
 </head>
 <body>
@@ -382,31 +415,8 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       <span id="modalTitleTxt">Nueva entrada</span>
     </div>
-    <div class="form-grid">
-      <div class="form-row2">
-        <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="f_name" placeholder="SAP B1 Producción"></div>
-        <div class="form-group"><label class="form-label">Categoría</label><select id="f_cat"></select></div>
-      </div>
-      <div class="form-row2">
-        <div class="form-group"><label class="form-label">IP / Hostname</label><input type="text" id="f_ip" placeholder="192.168.1.10"></div>
-        <div class="form-group"><label class="form-label">Puerto</label><input type="text" id="f_port" placeholder="22 · 3389"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Usuario</label><input type="text" id="f_user" placeholder="admin · root"></div>
-      <div class="form-group">
-        <label class="form-label">Contraseña</label>
-        <div class="pass-wrap">
-          <input type="password" id="f_pass" placeholder="contraseña...">
-          <div class="pass-actions">
-            <button class="btn-icon" type="button" onclick="toggleVis('f_pass')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-            <button class="btn-icon" type="button" onclick="genAndFill()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
-          </div>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label">URL / Acceso</label><input type="text" id="f_url" placeholder="https://"></div>
-      <div class="form-group"><label class="form-label">Tags (coma separados)</label><input type="text" id="f_tags" placeholder="producción, sap"></div>
-      <div class="form-group"><label class="form-label">Notas</label><textarea id="f_notes"></textarea></div>
-      <!-- Custom fields injected here -->
-      <div id="customFieldsForm"></div>
+    <div class="form-grid" id="entryFormGrid">
+      <!-- Rendered dynamically by renderEntryForm() -->
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancelar</button>
@@ -517,6 +527,107 @@ async function api(method, path, body) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Error');
   return data;
+}
+
+
+// ─── Built-in field definitions ───
+const BUILTIN_FIELDS = [
+  { key:'name',  label:'Nombre',         type:'text',     required:true,  paired:'cat',  placeholder:'SAP B1 Producción' },
+  { key:'cat',   label:'Categoría',      type:'select',   required:true,  paired:'name', placeholder:'' },
+  { key:'ip',    label:'IP / Hostname',  type:'text',     required:false, paired:'port', placeholder:'192.168.1.10' },
+  { key:'port',  label:'Puerto',         type:'text',     required:false, paired:'ip',   placeholder:'22 · 3389' },
+  { key:'user',  label:'Usuario',        type:'text',     required:false, paired:null,   placeholder:'admin · root' },
+  { key:'pass',  label:'Contraseña',     type:'password', required:false, paired:null,   placeholder:'contraseña...' },
+  { key:'url',   label:'URL / Acceso',   type:'url',      required:false, paired:null,   placeholder:'https://' },
+  { key:'tags',  label:'Tags',           type:'text',     required:false, paired:null,   placeholder:'producción, sap' },
+  { key:'notes', label:'Notas',          type:'textarea', required:false, paired:null,   placeholder:'Información adicional...' },
+];
+
+function getFieldOrder() {
+  // Returns ordered list of {key, visible} merging user prefs with builtins + custom
+  const saved = settings.fieldOrder || [];
+  const builtinKeys = BUILTIN_FIELDS.map(f=>f.key);
+  const customKeys = (settings.customFields||[]).map(f=>f.key);
+  const allKeys = [...builtinKeys, ...customKeys];
+  
+  // Start from saved order, add any missing keys
+  const ordered = [];
+  // Add saved fields that still exist
+  saved.forEach(s => {
+    if (allKeys.includes(s.key)) ordered.push(s);
+  });
+  // Add new fields not in saved
+  allKeys.forEach(k => {
+    if (!ordered.find(o=>o.key===k)) ordered.push({key:k, visible:true});
+  });
+  return ordered;
+}
+
+function renderEntryForm(entryData={}) {
+  const grid = document.getElementById('entryFormGrid');
+  if (!grid) return;
+  const order = getFieldOrder();
+  let html = '';
+  let skipNext = null;
+
+  order.forEach((item, idx) => {
+    if (!item.visible) return;
+    const key = item.key;
+    if (skipNext === key) { skipNext = null; return; }
+
+    const builtin = BUILTIN_FIELDS.find(f=>f.key===key);
+    const custom  = (settings.customFields||[]).find(f=>f.key===key);
+    const fdef    = builtin || (custom ? {...custom, required:false} : null);
+    if (!fdef) return;
+
+    const val = entryData[key] !== undefined ? entryData[key] : '';
+
+    // Check if paired field comes next and both visible
+    const pairedKey = builtin?.paired;
+    const pairedItem = pairedKey ? order.find(o=>o.key===pairedKey) : null;
+    const pairedNext = pairedItem?.visible && order[idx+1]?.key === pairedKey;
+
+    if (pairedNext) {
+      // Render as 2-col row
+      skipNext = pairedKey;
+      const pairedBuiltin = BUILTIN_FIELDS.find(f=>f.key===pairedKey);
+      const pairedVal = entryData[pairedKey] !== undefined ? entryData[pairedKey] : '';
+      html += `<div class="form-row2">
+        ${renderFieldInput(fdef, val)}
+        ${renderFieldInput(pairedBuiltin, pairedVal)}
+      </div>`;
+    } else {
+      html += renderFieldInput(fdef, val);
+    }
+  });
+
+  // Custom fields not in order (safety)
+  grid.innerHTML = html;
+}
+
+function renderFieldInput(fdef, val='') {
+  const id = 'f_' + fdef.key;
+  const lbl = fdef.label + (fdef.required ? ' *' : '');
+
+  if (fdef.type === 'select') {
+    const opts = (settings.categories||[]).map(c=>`<option value="${c.id}" ${val===c.id?'selected':''}>${esc(c.label)}</option>`).join('');
+    return `<div class="form-group"><label class="form-label">${lbl}</label><select id="${id}">${opts}</select></div>`;
+  }
+  if (fdef.type === 'textarea') {
+    return `<div class="form-group"><label class="form-label">${lbl}</label><textarea id="${id}" placeholder="${fdef.placeholder||''}">${esc(val)}</textarea></div>`;
+  }
+  if (fdef.type === 'password') {
+    return `<div class="form-group"><label class="form-label">${lbl}</label>
+      <div class="pass-wrap">
+        <input type="password" id="${id}" value="${esc(val)}" placeholder="${fdef.placeholder||''}">
+        <div class="pass-actions">
+          <button class="btn-icon" type="button" onclick="toggleVis('${id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button class="btn-icon" type="button" onclick="genAndFill()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+        </div>
+      </div></div>`;
+  }
+  return `<div class="form-group"><label class="form-label">${lbl}</label>
+    <input type="${fdef.type||'text'}" id="${id}" value="${esc(val)}" placeholder="${fdef.placeholder||''}"></div>`;
 }
 
 // ─── Auth ───
@@ -691,9 +802,7 @@ function copyRaw(val, label) {
 function openAddModal() {
   editIdx=-1;
   document.getElementById('modalTitleTxt').textContent='Nueva entrada';
-  ['name','ip','port','user','pass','url','tags','notes'].forEach(f=>{const el=document.getElementById('f_'+f);if(el)el.value='';});
-  if(settings.categories.length) document.getElementById('f_cat').value=settings.categories[0].id;
-  renderCustomFieldsForm();
+  renderEntryForm({cat: settings.categories[0]?.id || 'other'});
   document.getElementById('addModal').classList.add('open');
 }
 
@@ -701,16 +810,12 @@ function editEntry(idx) {
   editIdx=idx;
   const e=entries[idx];
   document.getElementById('modalTitleTxt').textContent='Editar entrada';
-  document.getElementById('f_name').value=e.name||'';
-  document.getElementById('f_cat').value=e.cat||'other';
-  document.getElementById('f_ip').value=e.ip||'';
-  document.getElementById('f_port').value=e.port||'';
-  document.getElementById('f_user').value=e.user||'';
-  document.getElementById('f_pass').value=e.pass||'';
-  document.getElementById('f_url').value=e.url||'';
-  document.getElementById('f_tags').value=(e.tags||[]).join(', ');
-  document.getElementById('f_notes').value=e.notes||'';
-  renderCustomFieldsForm(e.customFields||[]);
+  renderEntryForm({
+    name:e.name||'', cat:e.cat||'other', ip:e.ip||'', port:e.port||'',
+    user:e.user||'', pass:e.pass||'', url:e.url||'',
+    tags:(e.tags||[]).join(', '), notes:e.notes||'',
+    ...(e.customFields||[]).reduce((acc,cf)=>({...acc,[cf.key]:cf.value||''}),{})
+  });
   document.getElementById('addModal').classList.add('open');
 }
 
@@ -739,25 +844,24 @@ function renderCustomFieldsForm(existing=[]) {
 }
 
 async function saveEntry() {
-  const name=document.getElementById('f_name').value.trim();
+  const name=(document.getElementById('f_name')?.value||'').trim();
   if(!name){toast('El nombre es requerido',false);return;}
-  const passPlain=document.getElementById('f_pass').value;
+  const passPlain=document.getElementById('f_pass')?.value||'';
   const passEncrypted=await encryptVal(passPlain,masterKey);
-  const tags=document.getElementById('f_tags').value.split(',').map(t=>t.trim()).filter(Boolean);
-  // custom fields
+  const tagsRaw=document.getElementById('f_tags')?.value||'';
+  const tags=tagsRaw.split(',').map(t=>t.trim()).filter(Boolean);
   const customFields=await Promise.all((settings.customFields||[]).map(async f=>{
-    const el=document.getElementById('cf_'+f.key);
+    const el=document.getElementById('f_'+f.key);
     const val=el?el.value:'';
-    const valueEncrypted=f.type==='password'?await encryptVal(val,masterKey):await encryptVal(val,masterKey);
-    return {key:f.key,label:f.label,valueEncrypted,isPassword:f.type==='password'};
+    return {key:f.key,label:f.label,valueEncrypted:await encryptVal(val,masterKey),isPassword:f.type==='password'};
   }));
   const payload={
-    name,cat:document.getElementById('f_cat').value,
-    ip:document.getElementById('f_ip').value.trim(),
-    port:document.getElementById('f_port').value.trim(),
-    user:document.getElementById('f_user').value.trim(),
-    passEncrypted,url:document.getElementById('f_url').value.trim(),
-    tags,notes:document.getElementById('f_notes').value.trim(),
+    name,cat:document.getElementById('f_cat')?.value||'other',
+    ip:(document.getElementById('f_ip')?.value||'').trim(),
+    port:(document.getElementById('f_port')?.value||'').trim(),
+    user:(document.getElementById('f_user')?.value||'').trim(),
+    passEncrypted,url:(document.getElementById('f_url')?.value||'').trim(),
+    tags,notes:(document.getElementById('f_notes')?.value||'').trim(),
     customFields
   };
   try {
@@ -849,7 +953,7 @@ function openSettings(){
     <div class="settings-section">
       <h3>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        Campos personalizados <span style="font-size:11px;color:var(--text3);font-weight:400">(aplica solo a tus entradas)</span>
+        Campos personalizados
       </h3>
       <div class="field-list" id="fieldList"></div>
       <div class="add-row" style="margin-top:12px;flex-wrap:wrap;gap:8px">
@@ -864,9 +968,100 @@ function openSettings(){
         <button class="btn btn-primary" onclick="addCustomField()">Agregar campo</button>
       </div>
     </div>
+
+    <!-- FIELD ORDER -->
+    <div class="settings-section">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Orden y visibilidad de campos
+        <span style="font-size:11px;color:var(--text3);font-weight:400">— arrastra para reordenar</span>
+      </h3>
+      <div id="fieldOrderList" style="display:flex;flex-direction:column;gap:6px"></div>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="saveFieldOrder()">Guardar orden</button>
+    </div>
   </div>`;
   renderSettingsCats();
   renderSettingsFields();
+  renderFieldOrderList();
+}
+
+// ─── Field Order Drag & Drop ───
+let dragSrcIdx = null;
+
+function renderFieldOrderList() {
+  const list = document.getElementById('fieldOrderList');
+  if (!list) return;
+  const order = getFieldOrder();
+  list.innerHTML = order.map((item, idx) => {
+    const builtin = BUILTIN_FIELDS.find(f=>f.key===item.key);
+    const custom  = (settings.customFields||[]).find(f=>f.key===item.key);
+    const label   = builtin?.label || custom?.label || item.key;
+    const type    = builtin?.type  || custom?.type  || 'text';
+    const isRequired = builtin?.required || false;
+    return `<div class="draggable-field" draggable="true"
+        data-idx="${idx}" data-key="${item.key}"
+        ondragstart="dndStart(event,${idx})"
+        ondragover="dndOver(event,${idx})"
+        ondragleave="dndLeave(event)"
+        ondrop="dndDrop(event,${idx})"
+        ondragend="dndEnd(event)">
+      <div class="drag-handle">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
+      </div>
+      <div class="field-info">
+        <span style="font-size:14px;flex:1">${esc(label)}</span>
+        <span class="field-type-badge">${type}</span>
+        ${isRequired ? '<span style="font-size:10px;color:var(--text3);font-family:monospace">requerido</span>' : ''}
+      </div>
+      ${!isRequired ? `<div class="field-visibility ${item.visible?'on':''}" onclick="toggleFieldVisibility(${idx})" title="${item.visible?'Ocultar':'Mostrar'}"></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function dndStart(e, idx) {
+  dragSrcIdx = idx;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dndOver(e, idx) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.draggable-field').forEach(el=>el.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+function dndLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function dndEnd(e) {
+  document.querySelectorAll('.draggable-field').forEach(el=>{
+    el.classList.remove('dragging'); el.classList.remove('drag-over');
+  });
+}
+function dndDrop(e, targetIdx) {
+  e.preventDefault();
+  if (dragSrcIdx === null || dragSrcIdx === targetIdx) return;
+  const order = getFieldOrder();
+  const moved = order.splice(dragSrcIdx, 1)[0];
+  order.splice(targetIdx, 0, moved);
+  settings.fieldOrder = order;
+  dragSrcIdx = null;
+  renderFieldOrderList();
+}
+function toggleFieldVisibility(idx) {
+  const order = getFieldOrder();
+  if (order[idx].required) return;
+  order[idx].visible = !order[idx].visible;
+  settings.fieldOrder = order;
+  renderFieldOrderList();
+}
+async function saveFieldOrder() {
+  try {
+    const s = await api('PUT', '/settings/fields', {
+      customFields: settings.customFields,
+      fieldOrder: settings.fieldOrder || getFieldOrder()
+    });
+    settings = s;
+    renderFieldOrderList();
+    toast('Orden guardado');
+  } catch(e) { toast('Error: '+e.message, false); }
 }
 
 function closeSettings(){
