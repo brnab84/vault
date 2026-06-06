@@ -620,6 +620,20 @@
   </div>
 </div>
 
+
+<!-- SYNC MODAL -->
+<div class="overlay" id="syncModal">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div id="syncModalIcon" style="font-size:48px;margin-bottom:1rem">↻</div>
+    <div class="modal-title" style="justify-content:center;font-size:18px" id="syncModalTitle">Sincronizando...</div>
+    <p id="syncModalMsg" style="color:var(--text2);font-size:14px;line-height:1.6;margin:8px 0 1.5rem"></p>
+    <div id="syncModalProgress" style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:1.5rem">
+      <div id="syncModalBar" style="height:100%;width:0%;background:var(--accent);transition:width .4s;border-radius:2px"></div>
+    </div>
+    <button id="syncModalBtn" class="btn btn-primary" style="width:100%;display:none" onclick="closeModal('syncModal')">Entendido</button>
+  </div>
+</div>
+
 <!-- ADD/EDIT MODAL -->
 <div class="overlay" id="addModal">
   <div class="modal">
@@ -1608,6 +1622,44 @@ let toastT;
 function toast(msg,ok=true){const t=document.getElementById('toast');t.innerHTML=(ok?'✓':'✗')+' '+msg;t.style.color=ok?'var(--green)':'var(--red)';t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2500);}
 document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');}));
 
+
+
+// ─── Sync Modal ───
+function showSyncModal(state, title, msg, progress=0) {
+  const icons = { syncing:'↻', ok:'✓', error:'✗', offline:'⚡' };
+  const colors = { syncing:'var(--amber)', ok:'var(--green)', error:'var(--red)', offline:'var(--text3)' };
+
+  const icon  = document.getElementById('syncModalIcon');
+  const ttl   = document.getElementById('syncModalTitle');
+  const m     = document.getElementById('syncModalMsg');
+  const bar   = document.getElementById('syncModalBar');
+  const btn   = document.getElementById('syncModalBtn');
+
+  if (icon)  { icon.textContent = icons[state]||'↻'; icon.style.color = colors[state]||'var(--amber)'; }
+  if (ttl)   { ttl.textContent = title; ttl.style.color = colors[state]||'var(--text)'; }
+  if (m)     { m.textContent = msg; }
+  if (bar)   { bar.style.width = progress + '%'; bar.style.background = colors[state]; }
+  if (btn)   { btn.style.display = state !== 'syncing' ? 'block' : 'none'; }
+
+  document.getElementById('syncModal').classList.add('open');
+}
+
+// Spinning animation for sync icon
+let _spinInterval = null;
+function startSyncSpin() {
+  const el = document.getElementById('syncModalIcon');
+  if (!el) return;
+  let deg = 0;
+  _spinInterval = setInterval(() => {
+    deg = (deg + 15) % 360;
+    el.style.transform = 'rotate('+deg+'deg)';
+  }, 30);
+}
+function stopSyncSpin() {
+  clearInterval(_spinInterval);
+  const el = document.getElementById('syncModalIcon');
+  if (el) el.style.transform = 'none';
+}
 
 // ─── Mobile ───
 function openMobileSidebar() {
