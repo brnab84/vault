@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -141,18 +141,7 @@
   .custom-field-label{font-size:12px;font-weight:600;color:var(--text2);}
 
   
-  /* ─── DRAG & DROP FIELDS ─── */
-  .draggable-field{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;cursor:default;transition:all .15s;user-select:none;}
-  .draggable-field.dragging{opacity:.4;border-style:dashed;}
-  .draggable-field.drag-over{border-color:var(--accent);background:rgba(79,143,255,0.07);}
-  .drag-handle{cursor:grab;color:var(--text3);display:flex;align-items:center;flex-shrink:0;}
-  .drag-handle:active{cursor:grabbing;}
-  .field-info{flex:1;display:flex;align-items:center;gap:8px;}
-  .field-visibility{width:32px;height:18px;border-radius:9px;background:var(--bg4);position:relative;cursor:pointer;border:1px solid var(--border);transition:background .2s;flex-shrink:0;}
-  .field-visibility.on{background:var(--accent);border-color:var(--accent);}
-  .field-visibility::after{content:'';position:absolute;width:12px;height:12px;border-radius:50%;background:var(--text2);top:2px;left:2px;transition:all .2s;}
-  .field-visibility.on::after{left:16px;background:#fff;}
-
+  
   /* ─── TABLET ─── */
   @media (max-width:900px){
     .sidebar{width:200px;}
@@ -209,7 +198,7 @@
   /* Desktop — hide mobile elements */
   @media (min-width:681px){
     #mobileMenuBtn{display:none !important;}
-    #mobileSidebar{display:none !important;}
+    
   }
 
 
@@ -227,6 +216,256 @@
     }
     #authScreen {
       padding-top: calc(2rem + env(safe-area-inset-top, 0px));
+    }
+  }
+
+
+  /* ════════════════════════════════════════
+     RESPONSIVE — compatible iOS 14+ / Android 8+
+     No CSS grid subgrid, no :has(), no dvh
+     Breakpoints: 480 / 680 / 900 / 1200
+  ════════════════════════════════════════ */
+
+  /* ── Drag & Drop (kept here for all screens) ── */
+  .draggable-field{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;cursor:default;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-transition:all .15s;transition:all .15s;}
+  .draggable-field.dragging{opacity:.4;border-style:dashed;}
+  .draggable-field.drag-over{border-color:var(--accent);background:rgba(79,143,255,0.07);}
+  .drag-handle{cursor:grab;color:var(--text3);display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-ms-flex-negative:0;flex-shrink:0;padding:4px;}
+  .drag-handle:active{cursor:grabbing;}
+  .field-info{-webkit-box-flex:1;-ms-flex:1;flex:1;display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;gap:8px;}
+  .field-visibility{width:36px;height:20px;border-radius:10px;background:var(--bg4);position:relative;cursor:pointer;border:1px solid var(--border);-webkit-transition:background .2s;transition:background .2s;-ms-flex-negative:0;flex-shrink:0;}
+  .field-visibility.on{background:var(--accent);border-color:var(--accent);}
+  .field-visibility::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:var(--text2);top:2px;left:2px;-webkit-transition:all .2s;transition:all .2s;}
+  .field-visibility.on::after{left:18px;background:#fff;}
+
+  /* ── Large desktop 1200+ ── */
+  @media screen and (min-width:1200px){
+    .sidebar{width:260px;}
+    .main{margin-left:260px;}
+    .entry-grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));}
+    .content{padding:2rem;}
+  }
+
+  /* ── Tablet landscape 900-1199 ── */
+  @media screen and (max-width:1199px) and (min-width:901px){
+    .sidebar{width:220px;}
+    .main{margin-left:220px;}
+    .entry-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));}
+  }
+
+  /* ── Tablet portrait 681-900 ── */
+  @media screen and (max-width:900px) and (min-width:681px){
+    .sidebar{width:200px;}
+    .main{margin-left:200px;}
+    .entry-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;}
+    .topbar{padding:0 1rem;}
+    .content{padding:1rem;}
+    .nav-item{font-size:13px;padding:7px 1rem;}
+  }
+
+  /* ── Mobile (max 680px) ── */
+  @media screen and (max-width:680px){
+    /* prevent horizontal scroll */
+    html,body{overflow-x:hidden;max-width:100%;}
+    *{-webkit-box-sizing:border-box;box-sizing:border-box;}
+
+    /* hide desktop sidebar */
+    .sidebar{display:none !important;}
+    .main{margin-left:0 !important;width:100%;max-width:100%;}
+
+    /* show hamburger */
+    #mobileMenuBtn{
+      display:-webkit-box !important;
+      display:-ms-flexbox !important;
+      display:flex !important;
+    }
+
+    /* mobile topbar — two rows */
+    .topbar{
+      height:auto;
+      min-height:52px;
+      padding:8px 12px;
+      padding-top:calc(8px + env(safe-area-inset-top, 0px));
+      -ms-flex-wrap:wrap;
+      flex-wrap:wrap;
+      gap:6px;
+      -webkit-box-align:center;
+      -ms-flex-align:center;
+      align-items:center;
+    }
+    #mobileMenuBtn{-ms-flex-negative:0;flex-shrink:0;order:1;}
+    .topbar-right{margin-left:auto;order:2;display:-webkit-box;display:-ms-flexbox;display:flex;gap:6px;-webkit-box-align:center;-ms-flex-align:center;align-items:center;}
+    .search-wrap{-webkit-box-flex:0;-ms-flex:0 0 100%;flex:0 0 100%;max-width:100%;order:3;}
+    .search-wrap input{font-size:16px;} /* prevent iOS zoom on focus */
+    .stats-chip{display:none;}
+    .topbar-right .btn span{display:none;}
+    .topbar-right .btn{padding:8px 10px;font-size:13px;}
+
+    /* content */
+    .content{
+      padding:10px;
+      overflow-x:hidden;
+    }
+
+    /* single column grid */
+    .entry-grid{
+      display:-webkit-box;
+      display:-ms-flexbox;
+      display:flex;
+      -webkit-box-orient:vertical;
+      -webkit-box-direction:normal;
+      -ms-flex-direction:column;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    /* cards */
+    .entry-card{
+      width:100%;
+      max-width:100%;
+      overflow:hidden;
+      -webkit-box-sizing:border-box;
+      box-sizing:border-box;
+    }
+    .card-title{
+      font-size:14px;
+      white-space:nowrap;
+      overflow:hidden;
+      -o-text-overflow:ellipsis;
+      text-overflow:ellipsis;
+    }
+    .card-sub{
+      font-size:11px;
+      white-space:nowrap;
+      overflow:hidden;
+      -o-text-overflow:ellipsis;
+      text-overflow:ellipsis;
+    }
+    .card-header{overflow:hidden;-ms-flex-wrap:nowrap;flex-wrap:nowrap;}
+    .card-meta{-ms-flex-wrap:wrap;flex-wrap:wrap;gap:4px;overflow:hidden;}
+    .meta-pill{
+      max-width:150px;
+      overflow:hidden;
+      -o-text-overflow:ellipsis;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-size:10px;
+    }
+    .cat-label{font-size:9px;white-space:nowrap;-ms-flex-negative:0;flex-shrink:0;}
+    .card-icon{width:34px;height:34px;-ms-flex-negative:0;flex-shrink:0;}
+
+    /* modals slide up from bottom */
+    .overlay{
+      -webkit-box-align:end;
+      -ms-flex-align:end;
+      align-items:flex-end;
+      padding:0;
+    }
+    .modal{
+      width:100%;
+      max-width:100%;
+      max-height:92vh;
+      max-height:92dvh;
+      border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+      padding:1.25rem 1rem;
+      padding-bottom:calc(1.25rem + env(safe-area-inset-bottom, 0px));
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+    .form-row2{
+      display:-webkit-box;
+      display:-ms-flexbox;
+      display:flex;
+      -webkit-box-orient:vertical;
+      -webkit-box-direction:normal;
+      -ms-flex-direction:column;
+      flex-direction:column;
+      gap:10px;
+    }
+    /* bigger touch targets */
+    input,select,textarea{font-size:16px !important;min-height:44px;}
+    textarea{min-height:80px;}
+    .btn{min-height:44px;}
+    .btn-icon{min-width:40px;min-height:40px;}
+
+    /* auth */
+    .auth-card{
+      padding:1.25rem 1rem;
+      margin:0 8px;
+    }
+    #authScreen{
+      padding-top:calc(1rem + env(safe-area-inset-top, 0px));
+      padding-bottom:calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* settings */
+    .settings-section{padding:1rem;}
+    .add-row{
+      display:-webkit-box;
+      display:-ms-flexbox;
+      display:flex;
+      -ms-flex-wrap:wrap;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .add-row input,.add-row select{width:100%;min-width:0;}
+
+    /* bottom safe area for PWA */
+    .main{
+      padding-bottom:env(safe-area-inset-bottom, 0px);
+    }
+  }
+
+  /* ── Small mobile 320-480 ── */
+  @media screen and (max-width:480px){
+    .auth-logo h1{font-size:22px;}
+    .card-title{font-size:13px;}
+    .modal-title{font-size:16px;}
+    .entry-card{padding:0.875rem 1rem;}
+  }
+
+  /* ── Desktop only ── */
+  @media screen and (min-width:681px){
+    #mobileMenuBtn{display:none !important;}
+    #mobileSidebar{display:none !important;}
+  }
+
+  /* ── Mobile sidebar overlay ── */
+  #mobileSidebar{
+    display:none;
+    position:fixed;
+    top:0;left:0;right:0;bottom:0;
+    z-index:500;
+    background:rgba(0,0,0,0.75);
+    -webkit-backdrop-filter:blur(4px);
+    backdrop-filter:blur(4px);
+  }
+  #mobileSidebar.open{display:-webkit-box !important;display:-ms-flexbox !important;display:flex !important;-webkit-box-align:start;-ms-flex-align:start;align-items:flex-start;}
+  #mobileSidebarPanel{
+    width:280px;
+    max-width:85vw;
+    height:100vh;
+    height:-webkit-fill-available;
+    background:var(--bg2);
+    border-right:1px solid var(--border2);
+    display:-webkit-box;
+    display:-ms-flexbox;
+    display:flex;
+    -webkit-box-orient:vertical;
+    -webkit-box-direction:normal;
+    -ms-flex-direction:column;
+    flex-direction:column;
+    padding:1.5rem 0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-top:calc(1.5rem + env(safe-area-inset-top, 0px));
+    padding-bottom:calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ── PWA safe areas ── */
+  @supports (padding: env(safe-area-inset-top)){
+    @media screen and (max-width:680px){
+      .topbar{padding-top:calc(8px + env(safe-area-inset-top));}
     }
   }
 
@@ -283,6 +522,7 @@
     <div class="sidebar-bottom">
       <div class="user-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="usernameChip">—</span></div>
       <div class="sync-status" id="syncStatus"><div class="sync-dot" style="background:var(--text3)"></div><span>sin sincronizar</span></div>
+      <div id="appVersion" style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:4px;cursor:pointer" onclick="showChangelog()" title="Ver changelog"></div>
       <div class="nav-item" style="padding:8px 0;color:var(--text3)" onclick="logout()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión
       </div>
@@ -337,13 +577,29 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Parametrización
     </div>
     <div style="margin-top:auto;padding:1rem 1.25rem 0;border-top:1px solid var(--border)">
-      <div class="user-chip" style="margin-bottom:8px">
+      <div class="user-chip" style="margin-bottom:4px">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span id="usernameChipMobile">—</span>
       </div>
+      <div id="appVersionMobile" style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px;cursor:pointer" onclick="showChangelog();closeMobileSidebar()" title="Ver changelog"></div>
       <div class="nav-item" style="padding:8px 0;color:var(--text3)" onclick="logout()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- CHANGELOG MODAL -->
+<div class="overlay" id="changelogModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Versiones
+    </div>
+    <div id="changelogBody" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('changelogModal')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -614,6 +870,40 @@ function renderFieldInput(fdef, val='') {
     <input type="${fdef.type||'text'}" id="${id}" value="${esc(val)}" placeholder="${fdef.placeholder||''}"></div>`;
 }
 
+
+// ─── Version ───
+let appVersionData = null;
+
+async function loadVersion() {
+  try {
+    const res = await fetch('/version.json?t=' + Date.now());
+    appVersionData = await res.json();
+    const label = 'v' + appVersionData.version;
+    const el = document.getElementById('appVersion');
+    const elM = document.getElementById('appVersionMobile');
+    if (el) el.textContent = label;
+    if (elM) elM.textContent = label;
+  } catch(e) { console.warn('Version load failed:', e); }
+}
+
+function showChangelog() {
+  if (!appVersionData) return;
+  const body = document.getElementById('changelogBody');
+  if (!body) return;
+  body.innerHTML = appVersionData.changelog.map((entry, i) => {
+    const isLatest = i === 0;
+    const parts = entry.split(' - ');
+    const ver = parts[0];
+    const desc = parts.slice(1).join(' - ');
+    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${isLatest?'var(--accent)':'var(--border)'}">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:${isLatest?'var(--accent)':'var(--text2)'};white-space:nowrap;font-weight:${isLatest?'600':'400'}">${esc(ver)}</span>
+      <span style="font-size:13px;color:var(--text2)">${esc(desc)}</span>
+      ${isLatest?'<span style="font-size:9px;background:rgba(79,143,255,0.15);color:var(--accent);padding:2px 6px;border-radius:4px;white-space:nowrap;font-family:monospace">actual</span>':''}
+    </div>`;
+  }).join('');
+  document.getElementById('changelogModal').classList.add('open');
+}
+
 // ─── Auth ───
 function switchTab(tab) {
   currentTab = tab;
@@ -648,6 +938,7 @@ async function authSubmit() {
       }
     }
     document.getElementById('usernameChip').textContent = data.username;
+    loadVersion();
     const mc=document.getElementById('usernameChipMobile');if(mc)mc.textContent=data.username;
     document.getElementById('authScreen').style.display='none';
     document.getElementById('appView').style.display='block';
@@ -1304,6 +1595,7 @@ checkMobile();
       if(saved){
         masterKey=saved;
         document.getElementById('usernameChip').textContent=data.username;
+        loadVersion();
         document.getElementById('authScreen').style.display='none';
         document.getElementById('appView').style.display='block';
         await syncAll();

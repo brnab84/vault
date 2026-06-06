@@ -14,6 +14,9 @@ app.use('/api/entries',  require('./routes/entries'));
 app.use('/api/settings', require('./routes/settings'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+app.get('/version.json', (req, res) => {
+  res.sendFile(require('path').join(__dirname, '../version.json'));
+});
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
 
 mongoose.connect(process.env.MONGO_URI)
