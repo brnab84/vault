@@ -1,6 +1,9 @@
 {
   "name": "vault",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node backend/server.js",
     "dev": "cd backend && nodemon server.js"
