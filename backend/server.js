@@ -1,4 +1,11 @@
 require('dotenv').config();
+
+// Polyfill WebCrypto for Node < 19 (Railway compatibility)
+if (!globalThis.crypto) {
+  const { webcrypto } = require('crypto');
+  globalThis.crypto = webcrypto;
+}
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
