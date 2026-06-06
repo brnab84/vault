@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Vault — Gestor de contraseñas encriptado con AES-256. Seguro, simple y accesible desde cualquier dispositivo.">
+<meta name="theme-color" content="#0d0f12">
+<title>Vault — Gestor de Credenciales Seguro</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg:#0d0f12; --bg2:#13161b; --bg3:#1a1e25; --bg4:#222730;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
+  --text:#e8eaf0; --text2:#8b90a0; --text3:#555c6e;
+  --accent:#4f8fff; --accent2:#3a6fd4;
+  --green:#3ecf8e; --amber:#fbbf24; --teal:#2dd4bf; --purple:#8b5cf6;
+  --radius:10px; --radius-lg:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow-x:hidden;}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 2rem;height:64px;
+  background:rgba(13,15,18,0.85);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.nav-logo span{font-size:18px;font-weight:700;color:var(--text);}
+.enc-badge{font-size:9px;font-family:'JetBrains Mono',monospace;background:rgba(62,207,142,0.12);color:var(--green);padding:2px 7px;border-radius:4px;font-weight:500;}
+.nav-actions{display:flex;align-items:center;gap:10px;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;border-radius:var(--radius);font-family:'Syne',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:all .2s;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px);}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border2);}
+.btn-outline:hover{background:var(--bg3);border-color:var(--accent);}
+.btn-lg{padding:14px 32px;font-size:16px;border-radius:var(--radius-lg);}
+.btn-ghost{background:transparent;color:var(--text2);border:none;font-size:14px;font-weight:500;cursor:pointer;font-family:'Syne',sans-serif;padding:8px 12px;border-radius:var(--radius);transition:all .2s;}
+.btn-ghost:hover{color:var(--text);background:var(--bg3);}
+
+/* ── HERO ── */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:120px 2rem 80px;text-align:center;
+  position:relative;overflow:hidden;
+}
+.hero-glow{
+  position:absolute;top:20%;left:50%;transform:translateX(-50%);
+  width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle,rgba(79,143,255,0.12) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(79,143,255,0.1);border:1px solid rgba(79,143,255,0.25);
+  color:#7ab3ff;padding:6px 16px;border-radius:20px;
+  font-size:12px;font-family:'JetBrains Mono',monospace;
+  margin-bottom:2rem;
+}
+.hero h1{
+  font-size:clamp(2.5rem,7vw,5rem);font-weight:800;
+  line-height:1.1;letter-spacing:-2px;
+  margin-bottom:1.5rem;max-width:800px;
+}
+.hero h1 span{
+  background:linear-gradient(135deg,var(--accent),var(--teal));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero p{
+  font-size:clamp(1rem,2.5vw,1.25rem);color:var(--text2);
+  max-width:560px;line-height:1.7;margin-bottom:2.5rem;
+}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:3rem;}
+.hero-note{font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+
+/* ── MOCKUP ── */
+.mockup-wrap{
+  width:100%;max-width:860px;margin:0 auto;
+  position:relative;
+}
+.mockup-frame{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:var(--radius-lg);overflow:hidden;
+  box-shadow:0 40px 100px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.05);
+}
+.mockup-bar{
+  background:var(--bg3);padding:12px 16px;
+  display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border);
+}
+.mockup-dot{width:12px;height:12px;border-radius:50%;}
+.mockup-url{
+  flex:1;background:var(--bg4);border-radius:6px;
+  padding:5px 12px;font-size:12px;font-family:'JetBrains Mono',monospace;
+  color:var(--text3);text-align:center;
+}
+.mockup-body{display:flex;height:340px;}
+.mockup-sidebar{
+  width:180px;background:var(--bg2);border-right:1px solid var(--border);
+  padding:1rem 0;flex-shrink:0;
+}
+.mockup-nav-item{
+  padding:7px 14px;font-size:12px;color:var(--text3);
+  display:flex;align-items:center;gap:8px;
+}
+.mockup-nav-item.active{color:var(--accent);background:rgba(79,143,255,0.06);}
+.mockup-dot-cat{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.mockup-main{flex:1;padding:1rem;display:flex;flex-direction:column;gap:8px;overflow:hidden;}
+.mockup-topbar{display:flex;gap:8px;margin-bottom:4px;}
+.mockup-search{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;height:30px;}
+.mockup-btn{background:var(--accent);border-radius:6px;padding:0 12px;height:30px;border:none;color:#fff;font-size:11px;white-space:nowrap;}
+.mockup-card{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px;position:relative;overflow:hidden;
+}
+.mockup-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.mockup-card.blue::before{background:var(--accent);}
+.mockup-card.green::before{background:var(--green);}
+.mockup-card.amber::before{background:var(--amber);}
+.mockup-card-title{font-size:12px;font-weight:600;margin-bottom:4px;}
+.mockup-card-sub{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.mockup-pills{display:flex;gap:4px;margin-top:6px;}
+.mockup-pill{font-size:9px;padding:2px 6px;border-radius:10px;font-family:'JetBrains Mono',monospace;}
+
+/* ── FEATURES ── */
+.section{padding:100px 2rem;}
+.section-label{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem;text-align:center;}
+.section-title{font-size:clamp(1.75rem,4vw,2.75rem);font-weight:700;letter-spacing:-1px;text-align:center;margin-bottom:1rem;line-height:1.2;}
+.section-sub{font-size:1rem;color:var(--text2);text-align:center;max-width:560px;margin:0 auto 4rem;line-height:1.7;}
+
+.features-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:20px;max-width:1100px;margin:0 auto;
+}
+.feature-card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:1.75rem;
+  transition:border-color .2s,transform .2s;
+}
+.feature-card:hover{border-color:var(--border2);transform:translateY(-2px);}
+.feature-icon{
+  width:44px;height:44px;border-radius:var(--radius);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:1.25rem;font-size:20px;
+}
+.feature-card h3{font-size:16px;font-weight:600;margin-bottom:8px;}
+.feature-card p{font-size:14px;color:var(--text2);line-height:1.6;}
+
+/* ── HOW IT WORKS ── */
+.how-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:16px;max-width:900px;margin:0 auto;
+  counter-reset:steps;
+}
+.how-step{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:1.5rem;
+  position:relative;counter-increment:steps;
+}
+.how-step::before{
+  content:counter(steps);
+  position:absolute;top:-14px;left:1.5rem;
+  width:28px;height:28px;border-radius:50%;
+  background:var(--accent);color:#fff;
+  font-size:13px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+}
+.how-step h3{font-size:15px;font-weight:600;margin-bottom:8px;margin-top:8px;}
+.how-step p{font-size:13px;color:var(--text2);line-height:1.6;}
+
+/* ── SECURITY ── */
+.security-section{
+  background:var(--bg2);border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);padding:80px 2rem;
+}
+.security-grid{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:60px;max-width:1000px;margin:0 auto;
+  align-items:center;
+}
+.security-list{display:flex;flex-direction:column;gap:16px;}
+.security-item{display:flex;gap:14px;align-items:flex-start;}
+.security-check{
+  width:24px;height:24px;border-radius:50%;
+  background:rgba(62,207,142,0.12);color:var(--green);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:2px;font-size:12px;font-weight:700;
+}
+.security-item h4{font-size:14px;font-weight:600;margin-bottom:4px;}
+.security-item p{font-size:13px;color:var(--text2);line-height:1.5;}
+.security-visual{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius-lg);padding:2rem;
+  font-family:'JetBrains Mono',monospace;font-size:12px;
+}
+.code-line{padding:3px 0;color:var(--text3);}
+.code-line .kw{color:#c792ea;}
+.code-line .fn{color:#82aaff;}
+.code-line .str{color:#c3e88d;}
+.code-line .cm{color:var(--text3);font-style:italic;}
+
+/* ── PRICING ── */
+.pricing-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:20px;max-width:860px;margin:0 auto;
+}
+.pricing-card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:2rem;
+  display:flex;flex-direction:column;gap:1.25rem;
+  transition:border-color .2s;
+}
+.pricing-card.featured{
+  border-color:var(--accent);
+  background:linear-gradient(135deg,rgba(79,143,255,0.05),var(--bg2));
+  position:relative;
+}
+.pricing-badge{
+  position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  background:var(--accent);color:#fff;font-size:11px;font-weight:600;
+  padding:3px 14px;border-radius:20px;white-space:nowrap;
+}
+.pricing-name{font-size:14px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;font-family:'JetBrains Mono',monospace;}
+.pricing-price{display:flex;align-items:baseline;gap:4px;}
+.pricing-price .amount{font-size:3rem;font-weight:800;letter-spacing:-2px;}
+.pricing-price .period{font-size:14px;color:var(--text2);}
+.pricing-desc{font-size:13px;color:var(--text2);line-height:1.5;}
+.pricing-features{display:flex;flex-direction:column;gap:10px;flex:1;}
+.pricing-feature{display:flex;align-items:center;gap:10px;font-size:13px;}
+.pricing-feature svg{flex-shrink:0;color:var(--green);}
+.pricing-feature.dim{color:var(--text3);}
+.pricing-feature.dim svg{color:var(--text3);}
+
+/* ── CTA ── */
+.cta-section{
+  padding:100px 2rem;text-align:center;
+  background:radial-gradient(ellipse at center,rgba(79,143,255,0.08) 0%,transparent 70%);
+}
+.cta-section h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;letter-spacing:-1.5px;margin-bottom:1rem;line-height:1.15;}
+.cta-section p{font-size:1.1rem;color:var(--text2);margin-bottom:2.5rem;}
+
+/* ── FOOTER ── */
+footer{
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:3rem 2rem 2rem;
+}
+.footer-grid{
+  display:grid;grid-template-columns:2fr 1fr 1fr;
+  gap:3rem;max-width:1000px;margin:0 auto 2rem;
+}
+.footer-brand p{font-size:13px;color:var(--text2);line-height:1.7;margin-top:12px;max-width:280px;}
+.footer-col h4{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:1rem;}
+.footer-col a{display:block;font-size:13px;color:var(--text2);text-decoration:none;margin-bottom:8px;transition:color .15s;}
+.footer-col a:hover{color:var(--text);}
+.footer-bottom{
+  max-width:1000px;margin:0 auto;padding-top:2rem;
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width:768px){
+  nav{padding:0 1rem;}
+  .nav-actions .btn-ghost{display:none;}
+  .hero{padding:100px 1.25rem 60px;}
+  .hero h1{letter-spacing:-1px;}
+  .section{padding:70px 1.25rem;}
+  .security-grid{grid-template-columns:1fr;gap:40px;}
+  .security-visual{display:none;}
+  .footer-grid{grid-template-columns:1fr;gap:2rem;}
+  .footer-bottom{flex-direction:column;gap:8px;text-align:center;}
+  .mockup-sidebar{display:none;}
+  .mockup-body{height:260px;}
+}
+@media (max-width:480px){
+  .hero-actions{flex-direction:column;align-items:center;}
+  .hero-actions .btn{width:100%;max-width:300px;}
+  .pricing-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="8" fill="rgba(79,143,255,0.15)" stroke="rgba(79,143,255,0.3)" stroke-width="1"/>
+      <rect x="8" y="13" width="12" height="9" rx="2.5" fill="rgba(79,143,255,0.2)" stroke="#4f8fff" stroke-width="1.2"/>
+      <path d="M11 13V10a3 3 0 0 1 6 0v3" stroke="#4f8fff" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="14" cy="17.5" r="1.2" fill="#4f8fff"/>
+    </svg>
+    <span>Vault</span>
+    <span class="enc-badge">AES-256</span>
+  </a>
+  <div class="nav-actions">
+    <a href="/app" class="btn-ghost">Iniciar sesión</a>
+    <a href="/app#register" class="btn btn-primary" style="padding:8px 18px;font-size:13px">Empezar gratis</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-badge">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Encriptación AES-256-GCM · Zero knowledge
+  </div>
+  <h1>Tus credenciales,<br><span>siempre seguras</span></h1>
+  <p>Gestiona contraseñas, IPs, usuarios y accesos de forma segura. Encriptación local antes de llegar al servidor — ni nosotros podemos ver tus datos.</p>
+  <div class="hero-actions">
+    <a href="/app#register" class="btn btn-primary btn-lg">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Crear cuenta gratis
+    </a>
+    <a href="#features" class="btn btn-outline btn-lg">Ver funciones</a>
+  </div>
+  <div class="hero-note">Sin tarjeta de crédito · Gratis para siempre en plan básico</div>
+
+  <!-- App Mockup -->
+  <div class="mockup-wrap" style="margin-top:4rem">
+    <div class="mockup-frame">
+      <div class="mockup-bar">
+        <div class="mockup-dot" style="background:#ff5f57"></div>
+        <div class="mockup-dot" style="background:#febc2e"></div>
+        <div class="mockup-dot" style="background:#28c840"></div>
+        <div class="mockup-url">vault-production.up.railway.app</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-sidebar">
+          <div style="padding:0 12px 12px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:8px">
+            <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px">
+              <div style="width:16px;height:16px;background:rgba(79,143,255,0.2);border:1px solid #4f8fff;border-radius:4px"></div>
+              Vault
+            </div>
+          </div>
+          <div class="mockup-nav-item active"><div class="mockup-dot-cat" style="background:var(--text3)"></div>Todos <span style="margin-left:auto;font-size:10px;background:var(--bg4);padding:1px 5px;border-radius:8px">12</span></div>
+          <div class="mockup-nav-item"><div class="mockup-dot-cat" style="background:var(--accent)"></div>Servidores</div>
+          <div class="mockup-nav-item"><div class="mockup-dot-cat" style="background:var(--green)"></div>Web / App</div>
+          <div class="mockup-nav-item"><div class="mockup-dot-cat" style="background:var(--amber)"></div>Bases de Datos</div>
+          <div class="mockup-nav-item"><div class="mockup-dot-cat" style="background:var(--teal)"></div>VPN / Red</div>
+        </div>
+        <div class="mockup-main">
+          <div class="mockup-topbar">
+            <div class="mockup-search"></div>
+            <button class="mockup-btn">+ Nueva entrada</button>
+          </div>
+          <div class="mockup-card blue">
+            <div class="mockup-card-title">Servidor Producción</div>
+            <div class="mockup-card-sub">192.168.1.100</div>
+            <div class="mockup-pills">
+              <span class="mockup-pill" style="background:rgba(79,143,255,0.1);color:#7ab3ff">192.168.1.100</span>
+              <span class="mockup-pill" style="background:rgba(62,207,142,0.1);color:#5ddbaa">admin</span>
+              <span class="mockup-pill" style="background:rgba(251,191,36,0.1);color:#fcd05a">••••••</span>
+            </div>
+          </div>
+          <div class="mockup-card green">
+            <div class="mockup-card-title">Panel de Control</div>
+            <div class="mockup-card-sub">https://panel.empresa.com</div>
+            <div class="mockup-pills">
+              <span class="mockup-pill" style="background:rgba(62,207,142,0.1);color:#5ddbaa">admin@empresa.com</span>
+            </div>
+          </div>
+          <div class="mockup-card amber">
+            <div class="mockup-card-title">Base de Datos PostgreSQL</div>
+            <div class="mockup-card-sub">db.empresa.com:5432</div>
+            <div class="mockup-pills">
+              <span class="mockup-pill" style="background:rgba(251,191,36,0.1);color:#fcd05a">db_admin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-label">Funcionalidades</div>
+  <h2 class="section-title">Todo lo que necesitas,<br>sin lo que no necesitas</h2>
+  <p class="section-sub">Diseñado para equipos técnicos que gestionan múltiples accesos y necesitan seguridad real.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(79,143,255,0.1);color:var(--accent)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h3>Encriptación Zero Knowledge</h3>
+      <p>Tus contraseñas se encriptan en tu dispositivo antes de enviarse. Ni nosotros podemos descifrarlas.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(62,207,142,0.1);color:var(--green)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="13" width="20" height="6" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="16" r="1" fill="currentColor"/></svg>
+      </div>
+      <h3>Categorías personalizadas</h3>
+      <p>Servidores, bases de datos, VPNs, aplicaciones web. Organiza tus credenciales como quieras.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(251,191,36,0.1);color:var(--amber)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      </div>
+      <h3>Campos personalizados</h3>
+      <p>Agrega los campos que necesitas — token de API, número de licencia, notas técnicas. Todo encriptado.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(45,212,191,0.1);color:var(--teal)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </div>
+      <h3>Copiar con un toque</h3>
+      <p>Click en la IP, usuario o contraseña para copiar al portapapeles. Sin pasos extras.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(139,92,246,0.1);color:var(--purple)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z"/></svg>
+      </div>
+      <h3>Acceso desde cualquier lugar</h3>
+      <p>Web, móvil, tablet. Instálala como app nativa (PWA) en iOS y Android sin pasar por la App Store.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:rgba(248,113,113,0.1);color:#f87171">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </div>
+      <h3>Sync en tiempo real</h3>
+      <p>Tus datos sincronizados en MongoDB Atlas. Cambia en un dispositivo, está disponible en todos.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" style="padding-top:20px" id="how">
+  <div class="section-label">Cómo funciona</div>
+  <h2 class="section-title">En 3 pasos</h2>
+  <p class="section-sub">Sin instalaciones. Sin configuraciones complejas. Funciona en el browser.</p>
+  <div class="how-grid">
+    <div class="how-step">
+      <h3>Crea tu cuenta</h3>
+      <p>Registro con usuario y contraseña del sistema. Defines tu contraseña maestra — la clave de encriptación que solo tú conoces.</p>
+    </div>
+    <div class="how-step">
+      <h3>Agrega tus credenciales</h3>
+      <p>Crea entradas con IP, usuario, contraseña, URL y campos personalizados. Todo se encripta antes de guardarse.</p>
+    </div>
+    <div class="how-step">
+      <h3>Accede desde cualquier lugar</h3>
+      <p>Abre la app, ingresa tu contraseña maestra y tus datos se desencriptan localmente. Copia con un toque.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECURITY -->
+<div class="security-section">
+  <div class="security-grid">
+    <div>
+      <div class="section-label" style="text-align:left">Seguridad</div>
+      <h2 class="section-title" style="text-align:left;font-size:2rem;margin-bottom:2rem">Construido para<br>equipos técnicos</h2>
+      <div class="security-list">
+        <div class="security-item">
+          <div class="security-check">✓</div>
+          <div><h4>AES-256-GCM</h4><p>El estándar usado por gobiernos y bancos. Encriptación simétrica con vector de inicialización único por entrada.</p></div>
+        </div>
+        <div class="security-item">
+          <div class="security-check">✓</div>
+          <div><h4>PBKDF2 · 200,000 iteraciones</h4><p>Derivación de clave con sal aleatoria. Hace que los ataques de fuerza bruta sean computacionalmente inviables.</p></div>
+        </div>
+        <div class="security-item">
+          <div class="security-check">✓</div>
+          <div><h4>Zero Knowledge</h4><p>El servidor solo recibe datos encriptados. Sin tu contraseña maestra, nadie puede descifrarlos — ni nosotros.</p></div>
+        </div>
+        <div class="security-item">
+          <div class="security-check">✓</div>
+          <div><h4>JWT + bcrypt</h4><p>Autenticación con tokens firmados y contraseñas del sistema hasheadas con bcrypt (12 rounds).</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="security-visual">
+      <div class="code-line"><span class="cm">// Encriptación client-side</span></div>
+      <div class="code-line"><span class="kw">async function</span> <span class="fn">encrypt</span>(plain, master) {</div>
+      <div class="code-line" style="padding-left:16px"><span class="kw">const</span> salt = crypto.<span class="fn">getRandomValues</span>(</div>
+      <div class="code-line" style="padding-left:32px"><span class="kw">new</span> <span class="fn">Uint8Array</span>(<span class="str">16</span>));</div>
+      <div class="code-line" style="padding-left:16px"><span class="kw">const</span> key = <span class="kw">await</span> <span class="fn">deriveKey</span>(</div>
+      <div class="code-line" style="padding-left:32px">master, salt, <span class="str">200000</span>);</div>
+      <div class="code-line" style="padding-left:16px"><span class="kw">return</span> <span class="fn">AES_GCM_encrypt</span>(plain, key);</div>
+      <div class="code-line">}</div>
+      <br>
+      <div class="code-line"><span class="cm">// El servidor nunca ve plain</span></div>
+      <div class="code-line"><span class="fn">POST</span> /api/entries {</div>
+      <div class="code-line" style="padding-left:16px">passEncrypted: <span class="str">"U2FsdGVkX1..."</span></div>
+      <div class="code-line">}</div>
+    </div>
+  </div>
+</div>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+  <div class="section-label">Planes</div>
+  <h2 class="section-title">Simple y transparente</h2>
+  <p class="section-sub">Empieza gratis. Escala cuando lo necesites.</p>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="pricing-name">Free</div>
+      <div class="pricing-price">
+        <span class="amount">$0</span>
+        <span class="period">/ mes</span>
+      </div>
+      <div class="pricing-desc">Para uso personal o para probar la plataforma.</div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Hasta 50 entradas</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Categorías predefinidas</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Encriptación AES-256</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Acceso web + PWA</div>
+        <div class="pricing-feature dim"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Campos personalizados</div>
+        <div class="pricing-feature dim"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Categorías custom</div>
+      </div>
+      <a href="/app#register" class="btn btn-outline" style="width:100%;justify-content:center">Empezar gratis</a>
+    </div>
+
+    <div class="pricing-card featured">
+      <div class="pricing-badge">Más popular</div>
+      <div class="pricing-name">Pro</div>
+      <div class="pricing-price">
+        <span class="amount">$5</span>
+        <span class="period">/ mes</span>
+      </div>
+      <div class="pricing-desc">Para profesionales y equipos pequeños.</div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Entradas ilimitadas</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Categorías personalizadas</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Campos personalizados ilimitados</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Encriptación AES-256</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Acceso web + PWA</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Soporte prioritario</div>
+      </div>
+      <a href="/app#register" class="btn btn-primary" style="width:100%;justify-content:center">Empezar Pro</a>
+    </div>
+
+    <div class="pricing-card">
+      <div class="pricing-name">Enterprise</div>
+      <div class="pricing-price">
+        <span class="amount" style="font-size:2rem">Custom</span>
+      </div>
+      <div class="pricing-desc">Para organizaciones con necesidades específicas.</div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Todo lo de Pro</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Roles y permisos</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Auditoría de accesos</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>SSO / SAML</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Deploy dedicado</div>
+        <div class="pricing-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>SLA garantizado</div>
+      </div>
+      <a href="mailto:contacto@vault.app" class="btn btn-outline" style="width:100%;justify-content:center">Contactar</a>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>¿Listo para proteger<br>tus credenciales?</h2>
+  <p>Crea tu cuenta gratis en menos de 30 segundos.</p>
+  <a href="/app#register" class="btn btn-primary btn-lg">
+    Empezar ahora — es gratis
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  </a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <svg width="24" height="24" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="8" fill="rgba(79,143,255,0.15)" stroke="rgba(79,143,255,0.3)" stroke-width="1"/><rect x="8" y="13" width="12" height="9" rx="2.5" fill="rgba(79,143,255,0.2)" stroke="#4f8fff" stroke-width="1.2"/><path d="M11 13V10a3 3 0 0 1 6 0v3" stroke="#4f8fff" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <span style="font-weight:700;font-size:16px">Vault</span>
+      </div>
+      <p>Gestor de credenciales con encriptación AES-256-GCM. Tus datos siempre seguros, siempre disponibles.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Producto</h4>
+      <a href="#features">Funciones</a>
+      <a href="#how">Cómo funciona</a>
+      <a href="#pricing">Precios</a>
+      <a href="/app">Iniciar sesión</a>
+    </div>
+    <div class="footer-col">
+      <h4>Seguridad</h4>
+      <a href="#">Encriptación AES-256</a>
+      <a href="#">Zero Knowledge</a>
+      <a href="#">Política de privacidad</a>
+      <a href="#">Términos de uso</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Vault. Todos los derechos reservados.</span>
+    <span>AES-256-GCM · PBKDF2 · Zero Knowledge</span>
+  </div>
+</footer>
+
+</body>
+</html>
