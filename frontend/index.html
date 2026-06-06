@@ -1796,7 +1796,12 @@ async function registerPasskey() {
         ...c, id: base64urlToBuffer(c.id)
       }));
     }
-    const credential = await navigator.credentials.create({ publicKey: options });
+    // Force platform authenticator (Face ID / Touch ID) — not external apps
+    credential_options = {
+      publicKey: options,
+      mediation: 'optional'
+    };
+    const credential = await navigator.credentials.create(credential_options);
     // 3. Send to server
     const body = {
       id:       credential.id,
@@ -1836,7 +1841,10 @@ async function loginWithPasskey() {
         ...c, id: base64urlToBuffer(c.id)
       }));
     }
-    const assertion = await navigator.credentials.get({ publicKey: options });
+    const assertion = await navigator.credentials.get({
+      publicKey: options,
+      mediation: 'optional'
+    });
     // 3. Verify
     const body = {
       id:       assertion.id,
