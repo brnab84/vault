@@ -17,6 +17,24 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }
 app.get('/version.json', (req, res) => {
   res.sendFile(require('path').join(__dirname, '../version.json'));
 });
+
+// Serve sw.js with version injected — cache busting on every deploy
+app.get('/sw.js', (req, res) => {
+  const fs = require('fs');
+  const swPath = require('path').join(__dirname, '../frontend/sw.js');
+  const versionPath = require('path').join(__dirname, '../version.json');
+  try {
+    let sw = fs.readFileSync(swPath, 'utf8');
+    const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+    // Replace placeholder with actual version + timestamp for uniqueness
+    sw = sw.replace('__CACHE_VERSION__', version.version + '-' + version.build);
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(sw);
+  } catch(e) {
+    res.status(500).send('// SW error: ' + e.message);
+  }
+});
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/index.html')));
 
 mongoose.connect(process.env.MONGO_URI)
