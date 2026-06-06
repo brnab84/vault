@@ -1613,9 +1613,49 @@ checkMobile();
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
-        .then(r => console.log('SW registered:', r.scope))
-        .catch(e => console.warn('SW failed:', e));
+        .then(reg => {
+          console.log('[SW] Registered:', reg.scope);
+          // Check for updates every 60s
+          setInterval(() => reg.update(), 60000);
+        })
+        .catch(e => console.warn('[SW] Failed:', e));
+
+      // Listen for SW_UPDATED message → show reload banner
+      navigator.serviceWorker.addEventListener('message', e => {
+        if (e.data && e.data.type === 'SW_UPDATED') {
+          showUpdateBanner();
+        }
+      });
+
+      // Also check when tab becomes visible again
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg) reg.update();
+          });
+        }
+      });
     });
+  }
+
+  function showUpdateBanner() {
+    // Don't show twice
+    if (document.getElementById('updateBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'updateBanner';
+    banner.style.cssText = [
+      'position:fixed','top:0','left:0','right:0','z-index:9999',
+      'background:#4f8fff','color:#fff','text-align:center',
+      'padding:12px 16px','font-family:Syne,sans-serif','font-size:14px',
+      'display:flex','align-items:center','justify-content:center','gap:12px',
+      'box-shadow:0 2px 12px rgba(0,0,0,0.3)'
+    ].join(';');
+    banner.innerHTML = `
+      <span>🔄 Nueva versión disponible</span>
+      <button onclick="window.location.reload()" style="background:#fff;color:#4f8fff;border:none;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-family:Syne,sans-serif">Actualizar</button>
+      <button onclick="this.parentElement.remove()" style="background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:18px;padding:0 4px">&times;</button>
+    `;
+    document.body.prepend(banner);
   }
 </script>
 </body>
