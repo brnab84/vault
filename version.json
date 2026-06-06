@@ -1,7 +1,8 @@
 {
-  "version": "2.5.4",
+  "version": "2.5.5",
   "build": "2026-06-06",
   "changelog": [
+    "v2.5.5 - Hotfix: sync modal visible en móvil y escritorio",
     "v2.5.4 - Popup de sync con progreso, estados y auto-cierre",
     "v2.5.3 - Sync button visible en topbar responsive",
     "v2.5.2 - Sync feedback detallado + offline detection",
