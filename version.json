@@ -1,0 +1,12 @@
+{
+  "version": "2.4.0",
+  "build": "2026-06-06",
+  "changelog": [
+    "v2.4.0 - PWA, responsive, drag & drop campos",
+    "v2.3.0 - Defensive rendering, migration safety",
+    "v2.2.0 - Drag & drop field order por usuario",
+    "v2.1.0 - Responsive mobile",
+    "v2.0.0 - Categorías custom, campos personalizados, copy buttons",
+    "v1.0.0 - Launch: auth JWT, CRUD, AES-256, MongoDB"
+  ]
+}
