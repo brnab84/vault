@@ -469,6 +469,18 @@
     }
   }
 
+
+  /* ── Sync button in topbar ── */
+  #syncBtn { flex-shrink: 0; }
+  @media screen and (max-width: 480px) {
+    #syncBtn span { display: none; }
+    #syncBtn { padding: 6px 8px; }
+    .btn-new-label { display: none; }
+  }
+  @media screen and (max-width: 680px) {
+    #statsChip { display: none !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -1028,25 +1040,46 @@ async function syncAll() {
 }
 
 function setSyncStatus(s, detail='') {
-  const el = document.getElementById('syncStatus');
-  if (!el) return;
   const cfg = {
-    ok:      { color:'var(--green)',  dot:'var(--green)',  label:'sincronizado',     icon:'✓' },
-    error:   { color:'var(--red)',    dot:'var(--red)',    label:'error de sync',    icon:'✗' },
-    syncing: { color:'var(--amber)',  dot:'var(--amber)',  label:'sincronizando...', icon:'↻' },
-    offline: { color:'var(--text3)', dot:'var(--text3)', label:'sin conexión',      icon:'⚡' }
+    ok:      { color:'var(--green)',  dot:'var(--green)',  label:'sincronizado',     short:'✓ sync' },
+    error:   { color:'var(--red)',    dot:'var(--red)',    label:'error de sync',    short:'✗ error' },
+    syncing: { color:'var(--amber)',  dot:'var(--amber)',  label:'sincronizando...', short:'↻ ...' },
+    offline: { color:'var(--text3)', dot:'var(--text3)', label:'sin conexión',      short:'⚡ offline' }
   };
   const c = cfg[s] || cfg.error;
-  el.innerHTML = `
-    <div class="sync-dot" style="background:${c.dot}"></div>
-    <span style="color:${c.color}">${c.label}</span>`;
-  el.title = detail || c.label;
 
-  // Also show toast for meaningful state changes
+  // ── Sidebar status (desktop) ──
+  const el = document.getElementById('syncStatus');
+  if (el) {
+    el.innerHTML = `<div class="sync-dot" style="background:${c.dot}"></div><span style="color:${c.color}">${c.label}</span>`;
+    el.title = detail || c.label;
+  }
+
+  // ── Topbar button (always visible, mobile + desktop) ──
+  const dot   = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  const btn   = document.getElementById('syncBtn');
+  if (dot)   dot.style.background = c.dot;
+  if (label) {
+    // Show short label on mobile, detail on desktop
+    label.textContent = detail && window.innerWidth > 680 ? detail : c.short;
+    label.style.color = c.color;
+  }
+  if (btn) {
+    btn.title = detail || c.label;
+    // Spin animation while syncing
+    if (s === 'syncing') {
+      btn.style.opacity = '0.7';
+      btn.style.pointerEvents = 'none';
+    } else {
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    }
+  }
+
+  // ── Toast for errors ──
   if (s === 'error' && detail) {
     showSyncToast(detail, false);
-  } else if (s === 'ok' && detail) {
-    showSyncToast(detail, true);
   }
 }
 
