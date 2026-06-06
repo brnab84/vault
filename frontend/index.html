@@ -2,7 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Vault">
+  <meta name="theme-color" content="#0d0f12">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <title>Vault — Gestor de Credenciales</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;500;600;700&display=swap');
@@ -202,6 +210,24 @@
   @media (min-width:681px){
     #mobileMenuBtn{display:none !important;}
     #mobileSidebar{display:none !important;}
+  }
+
+
+  /* ─── PWA / Safe Area ─── */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (max-width: 680px) {
+    .topbar {
+      padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    }
+    .main {
+      margin-bottom: calc(env(safe-area-inset-bottom, 0px));
+    }
+    #authScreen {
+      padding-top: calc(2rem + env(safe-area-inset-top, 0px));
+    }
   }
 
 </style>
@@ -1285,6 +1311,16 @@ checkMobile();
     }catch{localStorage.removeItem('vault_token');token=null;}
   }
 })();
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(r => console.log('SW registered:', r.scope))
+        .catch(e => console.warn('SW failed:', e));
+    });
+  }
 </script>
 </body>
 </html>
