@@ -1,8 +1,9 @@
 {
-  "version": "2.5.2",
+  "version": "2.5.3",
   "build": "2026-06-06",
   "changelog": [
-    "v2.5.2 - Sync feedback: estados detallados, offline detection, errores claros",
+    "v2.5.3 - Sync button visible en topbar (móvil + escritorio)",
+    "v2.5.2 - Sync feedback: estados detallados, offline detection",
     "v2.5.1 - Hotfix: update banner respeta safe-area iPhone",
     "v2.5.0 - Landing page SaaS + routing / vs /app",
     "v2.4.1 - Cache busting + auto update banner",
