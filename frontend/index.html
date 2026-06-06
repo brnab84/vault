@@ -566,43 +566,87 @@ function getFieldOrder() {
 function renderEntryForm(entryData={}) {
   const grid = document.getElementById('entryFormGrid');
   if (!grid) return;
-  const order = getFieldOrder();
-  let html = '';
-  let skipNext = null;
+  try {
+    const order = getFieldOrder();
+    // Safety: ensure name and cat are always visible
+    order.forEach(o => { if (o.key==='name'||o.key==='cat') o.visible=true; });
 
-  order.forEach((item, idx) => {
-    if (!item.visible) return;
-    const key = item.key;
-    if (skipNext === key) { skipNext = null; return; }
+    let html = '';
+    let skipNext = null;
 
-    const builtin = BUILTIN_FIELDS.find(f=>f.key===key);
-    const custom  = (settings.customFields||[]).find(f=>f.key===key);
-    const fdef    = builtin || (custom ? {...custom, required:false} : null);
-    if (!fdef) return;
+    order.forEach((item, idx) => {
+      if (!item.visible) return;
+      const key = item.key;
+      if (skipNext === key) { skipNext = null; return; }
 
-    const val = entryData[key] !== undefined ? entryData[key] : '';
+      const builtin = BUILTIN_FIELDS.find(f=>f.key===key);
+      const custom  = (settings.customFields||[]).find(f=>f.key===key);
+      const fdef    = builtin || (custom ? {...custom, required:false} : null);
+      if (!fdef) return;
 
-    // Check if paired field comes next and both visible
-    const pairedKey = builtin?.paired;
-    const pairedItem = pairedKey ? order.find(o=>o.key===pairedKey) : null;
-    const pairedNext = pairedItem?.visible && order[idx+1]?.key === pairedKey;
+      const val = entryData[key] !== undefined ? entryData[key] : '';
 
-    if (pairedNext) {
-      // Render as 2-col row
-      skipNext = pairedKey;
-      const pairedBuiltin = BUILTIN_FIELDS.find(f=>f.key===pairedKey);
-      const pairedVal = entryData[pairedKey] !== undefined ? entryData[pairedKey] : '';
-      html += `<div class="form-row2">
-        ${renderFieldInput(fdef, val)}
-        ${renderFieldInput(pairedBuiltin, pairedVal)}
-      </div>`;
-    } else {
-      html += renderFieldInput(fdef, val);
-    }
-  });
+      const pairedKey = builtin?.paired;
+      const pairedItem = pairedKey ? order.find(o=>o.key===pairedKey) : null;
+      const pairedNext = pairedItem?.visible && order[idx+1]?.key === pairedKey;
 
-  // Custom fields not in order (safety)
-  grid.innerHTML = html;
+      if (pairedNext) {
+        skipNext = pairedKey;
+        const pairedBuiltin = BUILTIN_FIELDS.find(f=>f.key===pairedKey);
+        const pairedVal = entryData[pairedKey] !== undefined ? entryData[pairedKey] : '';
+        html += `<div class="form-row2">
+          ${renderFieldInput(fdef, val)}
+          ${renderFieldInput(pairedBuiltin, pairedVal)}
+        </div>`;
+      } else {
+        html += renderFieldInput(fdef, val);
+      }
+    });
+
+    if (!html) throw new Error('empty form');
+    grid.innerHTML = html;
+  } catch(err) {
+    console.warn('renderEntryForm fallback:', err);
+    // Static fallback — always works regardless of settings
+    renderEntryFormFallback(entryData);
+  }
+}
+
+function renderEntryFormFallback(d={}) {
+  const grid = document.getElementById('entryFormGrid');
+  if (!grid) return;
+  const catOpts = (settings.categories||[]).map(c=>`<option value="${c.id}" ${d.cat===c.id?'selected':''}>${esc(c.label)}</option>`).join('');
+  grid.innerHTML = `
+    <div class="form-row2">
+      <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="f_name" value="${esc(d.name||'')}" placeholder="SAP B1 Producción"></div>
+      <div class="form-group"><label class="form-label">Categoría</label><select id="f_cat">${catOpts}</select></div>
+    </div>
+    <div class="form-row2">
+      <div class="form-group"><label class="form-label">IP / Hostname</label><input type="text" id="f_ip" value="${esc(d.ip||'')}" placeholder="192.168.1.10"></div>
+      <div class="form-group"><label class="form-label">Puerto</label><input type="text" id="f_port" value="${esc(d.port||'')}" placeholder="22 · 3389"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Usuario</label><input type="text" id="f_user" value="${esc(d.user||'')}" placeholder="admin · root"></div>
+    <div class="form-group"><label class="form-label">Contraseña</label>
+      <div class="pass-wrap">
+        <input type="password" id="f_pass" value="${esc(d.pass||'')}" placeholder="contraseña...">
+        <div class="pass-actions">
+          <button class="btn-icon" type="button" onclick="toggleVis('f_pass')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button class="btn-icon" type="button" onclick="genAndFill()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">URL / Acceso</label><input type="text" id="f_url" value="${esc(d.url||'')}" placeholder="https://"></div>
+    <div class="form-group"><label class="form-label">Tags</label><input type="text" id="f_tags" value="${esc(d.tags||'')}" placeholder="producción, sap"></div>
+    <div class="form-group"><label class="form-label">Notas</label><textarea id="f_notes" placeholder="Información adicional...">${esc(d.notes||'')}</textarea></div>
+    ${(settings.customFields||[]).map(f=>`
+      <div class="form-group"><label class="form-label">${esc(f.label)}</label>
+        ${f.type==='password'
+          ? `<div class="pass-wrap"><input type="${f.type}" id="f_${f.key}" value="${esc(d[f.key]||'')}" placeholder="${esc(f.label)}..."><div class="pass-actions"><button class="btn-icon" type="button" onclick="toggleVis('f_${f.key}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>`
+          : f.type==='textarea'
+          ? `<textarea id="f_${f.key}" placeholder="${esc(f.label)}...">${esc(d[f.key]||'')}</textarea>`
+          : `<input type="${f.type||'text'}" id="f_${f.key}" value="${esc(d[f.key]||'')}" placeholder="${esc(f.label)}...">`
+        }
+      </div>`).join('')}`;
 }
 
 function renderFieldInput(fdef, val='') {
@@ -685,22 +729,67 @@ function logout() {
 async function syncAll() {
   setSyncStatus('syncing');
   try {
-    const [rawEntries, rawSettings] = await Promise.all([api('GET','/entries'), api('GET','/settings')]);
+    // Fetch settings first — create defaults if user has none
+    let rawSettings;
+    try {
+      rawSettings = await api('GET', '/settings');
+    } catch(se) {
+      console.warn('Settings fetch failed, using defaults:', se);
+      rawSettings = { categories: [], customFields: [], fieldOrder: [] };
+    }
+
+    // Ensure default categories always exist
+    if (!rawSettings.categories || !rawSettings.categories.length) {
+      rawSettings.categories = [
+        { id:'server', label:'Servidor',     color:'#4f8fff', builtIn:true },
+        { id:'web',    label:'Web / App',     color:'#3ecf8e', builtIn:true },
+        { id:'db',     label:'Base de Datos', color:'#fbbf24', builtIn:true },
+        { id:'vpn',    label:'VPN / Red',     color:'#2dd4bf', builtIn:true },
+        { id:'other',  label:'Otro',          color:'#888888', builtIn:true }
+      ];
+    }
     settings = rawSettings;
-    entries = await Promise.all(rawEntries.map(async e => ({
-      ...e,
-      pass: await decryptVal(e.passEncrypted, masterKey),
-      customFields: await Promise.all((e.customFields||[]).map(async cf => ({
-        ...cf,
-        value: await decryptVal(cf.valueEncrypted, masterKey)
-      })))
-    })));
+
+    // Fetch entries — if fails, keep existing entries (don't wipe UI)
+    let rawEntries = [];
+    try {
+      rawEntries = await api('GET', '/entries');
+    } catch(ee) {
+      console.warn('Entries fetch failed:', ee);
+      setSyncStatus('error');
+      toast('No se pudieron cargar las entradas', false);
+      renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts();
+      return;
+    }
+
+    // Decrypt entries — individual failures don't crash the whole list
+    entries = await Promise.all(rawEntries.map(async e => {
+      try {
+        return {
+          ...e,
+          pass: await decryptVal(e.passEncrypted, masterKey),
+          customFields: await Promise.all((e.customFields||[]).map(async cf => ({
+            ...cf,
+            value: await decryptVal(cf.valueEncrypted, masterKey)
+          })))
+        };
+      } catch(de) {
+        console.warn('Decrypt error for entry', e._id, de);
+        return { ...e, pass: '', customFields: (e.customFields||[]).map(cf=>({...cf,value:''})) };
+      }
+    }));
+
     renderCatNav();
     renderCategorySelect();
     renderEntries();
     updateCounts();
     setSyncStatus('ok');
-  } catch(e){setSyncStatus('error');toast('Error sync: '+e.message,false);}
+  } catch(e) {
+    setSyncStatus('error');
+    toast('Error sync: ' + e.message, false);
+    // Don't crash — render whatever we have
+    try { renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts(); } catch(_){}
+  }
 }
 
 function setSyncStatus(s) {
@@ -716,6 +805,7 @@ function getCat(id) {
 }
 
 function renderCatNav() {
+  try {
   const nav = document.getElementById('catNav');
   if (!nav) return;
   const allCount = entries.length;
@@ -729,6 +819,7 @@ function renderCatNav() {
       ${esc(c.label)} <span class="nav-count">${count}</span></div>`;
   });
   nav.innerHTML = html;
+  } catch(e){ console.warn('renderCatNav:', e); }
 }
 
 function renderCategorySelect() {
@@ -844,7 +935,9 @@ function renderCustomFieldsForm(existing=[]) {
 }
 
 async function saveEntry() {
-  const name=(document.getElementById('f_name')?.value||'').trim();
+  const nameEl = document.getElementById('f_name');
+  if (!nameEl) { toast('Error al leer el formulario. Intenta cerrar y abrir de nuevo.', false); return; }
+  const name = nameEl.value.trim();
   if(!name){toast('El nombre es requerido',false);return;}
   const passPlain=document.getElementById('f_pass')?.value||'';
   const passEncrypted=await encryptVal(passPlain,masterKey);
@@ -1047,7 +1140,12 @@ function dndDrop(e, targetIdx) {
 }
 function toggleFieldVisibility(idx) {
   const order = getFieldOrder();
-  if (order[idx].required) return;
+  const key = order[idx]?.key;
+  // name and cat are always required — never hide
+  if (order[idx]?.required || key==='name' || key==='cat') {
+    toast('Este campo no se puede ocultar', false);
+    return;
+  }
   order[idx].visible = !order[idx].visible;
   settings.fieldOrder = order;
   renderFieldOrderList();
