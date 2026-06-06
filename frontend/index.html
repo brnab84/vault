@@ -96,8 +96,10 @@
   .card-footer{display:flex;justify-content:flex-end;gap:4px;margin-top:2px;}
   .cat-label{font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:4px;font-weight:600;}
 
-  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(3px);}
-  .overlay.open{display:flex;}
+  .overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:100;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;padding:1rem;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
+  .overlay.open{display:-webkit-box !important;display:-ms-flexbox !important;display:flex !important;}
+  #syncModal{z-index:9999 !important;}
+  #syncModal .modal{text-align:center;max-width:360px;}
   .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.75rem;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;}
   .modal-title{font-size:18px;font-weight:600;margin-bottom:1.5rem;display:flex;align-items:center;gap:8px;}
   .form-grid{display:flex;flex-direction:column;gap:14px;}
@@ -586,7 +588,7 @@
     <div class="nav-item" onclick="openGenerator();closeMobileSidebar()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 2H3v16h5l3 3 3-3h7V2z"/></svg>Generar pass
     </div>
-    <div class="nav-item" onclick="syncAll();closeMobileSidebar()">
+    <div class="nav-item" onclick="closeMobileSidebar();setTimeout(syncAll,200)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Sincronizar
     </div>
     <div class="nav-item" onclick="openSettings();closeMobileSidebar()">
@@ -1616,7 +1618,13 @@ function genAndFill(){const pw=generatePassword();if(pw){document.getElementById
 
 // ─── Utils ───
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function closeModal(id){document.getElementById(id).classList.remove('open');}
+function closeModal(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('open');
+  el.style.display = '';
+  el.style.zIndex = '';
+}
 function toggleVis(id){const i=document.getElementById(id);i.type=i.type==='password'?'text':'password';}
 let toastT;
 function toast(msg,ok=true){const t=document.getElementById('toast');t.innerHTML=(ok?'✓':'✗')+' '+msg;t.style.color=ok?'var(--green)':'var(--red)';t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2500);}
@@ -1626,22 +1634,28 @@ document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=
 
 // ─── Sync Modal ───
 function showSyncModal(state, title, msg, progress=0) {
-  const icons = { syncing:'↻', ok:'✓', error:'✗', offline:'⚡' };
+  const icons  = { syncing:'↻', ok:'✓', error:'✗', offline:'⚡' };
   const colors = { syncing:'var(--amber)', ok:'var(--green)', error:'var(--red)', offline:'var(--text3)' };
 
+  const modal = document.getElementById('syncModal');
   const icon  = document.getElementById('syncModalIcon');
   const ttl   = document.getElementById('syncModalTitle');
   const m     = document.getElementById('syncModalMsg');
   const bar   = document.getElementById('syncModalBar');
   const btn   = document.getElementById('syncModalBtn');
 
-  if (icon)  { icon.textContent = icons[state]||'↻'; icon.style.color = colors[state]||'var(--amber)'; }
-  if (ttl)   { ttl.textContent = title; ttl.style.color = colors[state]||'var(--text)'; }
-  if (m)     { m.textContent = msg; }
-  if (bar)   { bar.style.width = progress + '%'; bar.style.background = colors[state]; }
-  if (btn)   { btn.style.display = state !== 'syncing' ? 'block' : 'none'; }
+  if (!modal) return;
 
-  document.getElementById('syncModal').classList.add('open');
+  if (icon) { icon.textContent = icons[state]||'↻'; icon.style.color = colors[state]||'var(--amber)'; }
+  if (ttl)  { ttl.textContent = title; ttl.style.color = colors[state]||'var(--text)'; }
+  if (m)    { m.textContent = msg; }
+  if (bar)  { bar.style.width = progress + '%'; bar.style.background = colors[state]; }
+  if (btn)  { btn.style.display = state !== 'syncing' ? 'block' : 'none'; }
+
+  // Force overlay open — ensure it's above everything
+  modal.classList.add('open');
+  modal.style.zIndex = '9999';
+  modal.style.display = 'flex';
 }
 
 // Spinning animation for sync icon
