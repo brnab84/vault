@@ -1,7 +1,8 @@
 {
-  "version": "2.5.7",
+  "version": "2.6.0",
   "build": "2026-06-06",
   "changelog": [
+    "v2.6.0 - Face ID / Touch ID / Biometría via WebAuthn",
     "v2.5.7 - Fix cache: HTML nunca se cachea, no-cache headers",
     "v2.5.6 - Sync modal funcional en móvil y escritorio",
     "v2.5.5 - Hotfix: sync modal visible móvil + escritorio",
