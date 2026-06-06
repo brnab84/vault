@@ -1590,6 +1590,12 @@ window.addEventListener('load', checkMobile);
 checkMobile();
 
 // Auto-login
+// Handle #register hash from landing CTAs
+if (window.location.hash === '#register') {
+  switchTab('register');
+  window.history.replaceState(null, '', window.location.pathname);
+}
+
 (async()=>{
   if(token){
     try{
