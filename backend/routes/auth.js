@@ -71,9 +71,9 @@ router.post('/passkey/register/start', authMw, async (req, res) => {
         transports: pk.transports
       })),
       authenticatorSelection: {
-        residentKey: 'preferred',
-        userVerification: 'preferred',
-        authenticatorAttachment: 'platform' // biometrics only (Face ID, Touch ID, fingerprint)
+        residentKey: 'discouraged',
+        userVerification: 'required',
+        authenticatorAttachment: 'platform' // strictly platform only — no external apps
       }
     });
     // Store challenge temporarily
