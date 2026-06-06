@@ -1,10 +1,11 @@
 {
-  "version": "2.5.5",
+  "version": "2.5.6",
   "build": "2026-06-06",
   "changelog": [
-    "v2.5.5 - Hotfix: sync modal visible en móvil y escritorio",
-    "v2.5.4 - Popup de sync con progreso, estados y auto-cierre",
-    "v2.5.3 - Sync button visible en topbar responsive",
+    "v2.5.6 - Sync modal funcional en móvil y escritorio + botón en topbar",
+    "v2.5.5 - Hotfix: sync modal visible móvil + escritorio",
+    "v2.5.4 - Popup de sync con progreso y estados",
+    "v2.5.3 - Sync button en topbar responsive",
     "v2.5.2 - Sync feedback detallado + offline detection",
     "v2.5.1 - Hotfix: update banner safe-area iPhone",
     "v2.5.0 - Landing page SaaS + routing / vs /app",

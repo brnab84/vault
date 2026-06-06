@@ -554,7 +554,10 @@
         <input type="text" id="searchInput" placeholder="Buscar por nombre, IP, usuario..." oninput="renderEntries()">
       </div>
       <div class="topbar-right">
-        <span class="stats-chip" id="statsChip">0 entradas</span>
+        <button id="syncBtn" onclick="syncAll()" title="Sincronizar" style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:7px 12px;border-radius:var(--radius);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;min-height:36px">
+          <div id="syncDot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0"></div>
+          <span id="syncLabel">sync</span>
+        </button>
         <button class="btn btn-primary" onclick="openAddModal()" style="display:flex;align-items:center;gap:6px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nueva entrada
         </button>
@@ -990,67 +993,78 @@ function logout() {
 
 // ─── Sync ───
 async function syncAll() {
-  setSyncStatus('syncing');
-  try {
-    // Fetch settings first — create defaults if user has none
-    let rawSettings;
-    try {
-      rawSettings = await api('GET', '/settings');
-    } catch(se) {
-      console.warn('Settings fetch failed, using defaults:', se);
-      rawSettings = { categories: [], customFields: [], fieldOrder: [] };
-    }
+  // Show modal immediately
+  _syncModal('syncing', 'Sincronizando...', 'Conectando...', 15);
+  setSyncDot('var(--amber)', 'sync...');
 
-    // Ensure default categories always exist
-    if (!rawSettings.categories || !rawSettings.categories.length) {
+  if (!navigator.onLine) {
+    _syncModal('offline', 'Sin conexión', 'No hay internet. Verifica tu red.', 0);
+    setSyncDot('var(--text3)', 'offline');
+    return;
+  }
+
+  const t0 = Date.now();
+  try {
+    // Settings
+    let rawSettings;
+    try { rawSettings = await api('GET', '/settings'); }
+    catch(e) { rawSettings = { categories:[], customFields:[], fieldOrder:[] }; }
+    if (!rawSettings.categories||!rawSettings.categories.length) {
       rawSettings.categories = [
-        { id:'server', label:'Servidor',     color:'#4f8fff', builtIn:true },
-        { id:'web',    label:'Web / App',     color:'#3ecf8e', builtIn:true },
-        { id:'db',     label:'Base de Datos', color:'#fbbf24', builtIn:true },
-        { id:'vpn',    label:'VPN / Red',     color:'#2dd4bf', builtIn:true },
-        { id:'other',  label:'Otro',          color:'#888888', builtIn:true }
+        {id:'server',label:'Servidor',color:'#4f8fff',builtIn:true},
+        {id:'web',label:'Web / App',color:'#3ecf8e',builtIn:true},
+        {id:'db',label:'Base de Datos',color:'#fbbf24',builtIn:true},
+        {id:'vpn',label:'VPN / Red',color:'#2dd4bf',builtIn:true},
+        {id:'other',label:'Otro',color:'#888888',builtIn:true}
       ];
     }
     settings = rawSettings;
+    _syncModal('syncing', 'Sincronizando...', 'Cargando entradas...', 45);
 
-    // Fetch entries — if fails, keep existing entries (don't wipe UI)
+    // Entries
     let rawEntries = [];
-    try {
-      rawEntries = await api('GET', '/entries');
-    } catch(ee) {
-      console.warn('Entries fetch failed:', ee);
-      setSyncStatus('error');
-      toast('No se pudieron cargar las entradas', false);
-      renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts();
+    try { rawEntries = await api('GET', '/entries'); }
+    catch(ee) {
+      const msg = ee.message.includes('401') ? 'Sesión expirada' :
+                  ee.message.includes('500') ? 'Error en el servidor' :
+                  ee.message.includes('fetch') ? 'Sin conexión al servidor' :
+                  ee.message;
+      _syncModal('error', 'Error de sincronización', msg, 45);
+      setSyncDot('var(--red)', '✗ error');
+      if (ee.message.includes('401')) setTimeout(logout, 2500);
+      try { renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts(); renderCatNavMobile(); } catch(_){}
       return;
     }
 
-    // Decrypt entries — individual failures don't crash the whole list
+    // Decrypt
+    _syncModal('syncing', 'Sincronizando...', 'Descifrando datos...', 75);
+    let errs = 0;
     entries = await Promise.all(rawEntries.map(async e => {
       try {
-        return {
-          ...e,
+        return { ...e,
           pass: await decryptVal(e.passEncrypted, masterKey),
           customFields: await Promise.all((e.customFields||[]).map(async cf => ({
-            ...cf,
-            value: await decryptVal(cf.valueEncrypted, masterKey)
+            ...cf, value: await decryptVal(cf.valueEncrypted, masterKey)
           })))
         };
-      } catch(de) {
-        console.warn('Decrypt error for entry', e._id, de);
-        return { ...e, pass: '', customFields: (e.customFields||[]).map(cf=>({...cf,value:''})) };
-      }
+      } catch(_) { errs++; return { ...e, pass:'', customFields:(e.customFields||[]).map(cf=>({...cf,value:''})) }; }
     }));
 
-    renderCatNav();
-    renderCategorySelect();
-    renderEntries();
-    updateCounts();
-    renderCatNavMobile();
-    setSyncStatus('ok');
+    renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts(); renderCatNavMobile();
+
+    const elapsed = ((Date.now()-t0)/1000).toFixed(1);
+    const n = entries.length;
+    const msg = errs > 0 ? `${n} entradas · ${errs} error(es) de descifrado`
+                         : `${n} entrada${n!==1?'s':''} en ${elapsed}s`;
+
+    _syncModal(errs > 0 ? 'error' : 'ok', errs > 0 ? 'Completado con advertencias' : '¡Sincronizado!', msg, 100);
+    setSyncDot('var(--green)', '✓ sync');
+    if (errs === 0) setTimeout(() => document.getElementById('syncModal')?.classList.remove('open'), 1800);
+
   } catch(e) {
-    setSyncStatus('error');
-    toast('Error sync: ' + e.message, false);
+    const msg = e.message.includes('fetch') ? 'Sin conexión al servidor' : e.message;
+    _syncModal('error', 'Error', msg, 0);
+    setSyncDot('var(--red)', '✗ error');
     try { renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts(); renderCatNavMobile(); } catch(_){}
   }
 }
@@ -1674,6 +1688,35 @@ function stopSyncSpin() {
   const el = document.getElementById('syncModalIcon');
   if (el) el.style.transform = 'none';
 }
+
+
+// ─── Sync helpers ───
+function _syncModal(state, title, msg, pct) {
+  const m = document.getElementById('syncModal');
+  if (!m) return;
+  const colors = {ok:'var(--green)',error:'var(--red)',syncing:'var(--amber)',offline:'var(--text3)'};
+  const icons  = {ok:'✓',error:'✗',syncing:'↻',offline:'⚡'};
+  const ic  = document.getElementById('syncModalIcon');
+  const ttl = document.getElementById('syncModalTitle');
+  const msg2= document.getElementById('syncModalMsg');
+  const bar = document.getElementById('syncModalBar');
+  const btn = document.getElementById('syncModalBtn');
+  if (ic)  { ic.textContent = icons[state]||'↻'; ic.style.color = colors[state]; }
+  if (ttl) { ttl.textContent = title; ttl.style.color = colors[state]; }
+  if (msg2){ msg2.textContent = msg; }
+  if (bar) { bar.style.width = pct+'%'; bar.style.background = colors[state]; }
+  if (btn) { btn.style.display = state !== 'syncing' ? 'block' : 'none'; }
+  m.classList.add('open');
+  m.style.cssText += ';display:flex!important;z-index:9999!important';
+}
+function setSyncDot(color, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  if (dot) dot.style.background = color;
+  if (lbl) { lbl.textContent = label; lbl.style.color = color; }
+}
+window.addEventListener('online',  () => syncAll());
+window.addEventListener('offline', () => { _syncModal('offline','Sin conexión','No hay internet.',0); setSyncDot('var(--text3)','offline'); });
 
 // ─── Mobile ───
 function openMobileSidebar() {
