@@ -1,10 +1,11 @@
 {
-  "version": "2.5.3",
+  "version": "2.5.4",
   "build": "2026-06-06",
   "changelog": [
-    "v2.5.3 - Sync button visible en topbar (móvil + escritorio)",
-    "v2.5.2 - Sync feedback: estados detallados, offline detection",
-    "v2.5.1 - Hotfix: update banner respeta safe-area iPhone",
+    "v2.5.4 - Popup de sync con progreso, estados y auto-cierre",
+    "v2.5.3 - Sync button visible en topbar responsive",
+    "v2.5.2 - Sync feedback detallado + offline detection",
+    "v2.5.1 - Hotfix: update banner safe-area iPhone",
     "v2.5.0 - Landing page SaaS + routing / vs /app",
     "v2.4.1 - Cache busting + auto update banner",
     "v2.4.0 - PWA, version display, responsive 5yr devices",
