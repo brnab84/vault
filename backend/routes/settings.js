@@ -4,15 +4,44 @@ const UserSettings = require('../models/UserSettings');
 
 router.use(auth);
 
-// GET settings (create defaults if not exist)
+const DEFAULT_CATEGORIES = [
+  { id: 'server', label: 'Servidor',      color: '#4f8fff', builtIn: true },
+  { id: 'web',    label: 'Web / App',      color: '#3ecf8e', builtIn: true },
+  { id: 'db',     label: 'Base de Datos',  color: '#fbbf24', builtIn: true },
+  { id: 'vpn',    label: 'VPN / Red',      color: '#2dd4bf', builtIn: true },
+  { id: 'other',  label: 'Otro',           color: '#888888', builtIn: true }
+];
+
+// Ensure built-in categories always present (migration safe)
+function ensureBuiltins(categories = []) {
+  const existing = categories.map(c => c.id);
+  const missing = DEFAULT_CATEGORIES.filter(d => !existing.includes(d.id));
+  return [...missing, ...categories];
+}
+
+// GET settings — always returns valid object, creates defaults if missing
 router.get('/', async (req, res) => {
   try {
     let settings = await UserSettings.findOne({ userId: req.user.id });
     if (!settings) {
       settings = await UserSettings.create({ userId: req.user.id });
     }
+    // Migration: ensure builtins exist for old users
+    const fixed = ensureBuiltins(settings.categories || []);
+    if (fixed.length !== (settings.categories || []).length) {
+      settings.categories = fixed;
+      await settings.save();
+    }
     res.json(settings);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    // Never crash — return safe defaults
+    console.error('GET /settings error:', e);
+    res.json({
+      categories: DEFAULT_CATEGORIES,
+      customFields: [],
+      fieldOrder: []
+    });
+  }
 });
 
 // PUT update categories
@@ -20,10 +49,11 @@ router.put('/categories', async (req, res) => {
   try {
     const { categories } = req.body;
     if (!Array.isArray(categories)) return res.status(400).json({ error: 'categories debe ser array' });
-    // Preserve built-in categories, allow adding/editing custom ones
+    // Always keep builtins
+    const safe = ensureBuiltins(categories);
     const settings = await UserSettings.findOneAndUpdate(
       { userId: req.user.id },
-      { categories },
+      { categories: safe },
       { new: true, upsert: true }
     );
     res.json(settings);
