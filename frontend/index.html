@@ -1027,11 +1027,37 @@ async function syncAll() {
   }
 }
 
-function setSyncStatus(s) {
-  const el=document.getElementById('syncStatus');
-  const c={ok:'var(--green)',error:'var(--red)',syncing:'var(--amber)'};
-  const l={ok:'sincronizado',error:'error sync',syncing:'sincronizando...'};
-  el.innerHTML=`<div class="sync-dot" style="background:${c[s]}"></div><span>${l[s]}</span>`;
+function setSyncStatus(s, detail='') {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const cfg = {
+    ok:      { color:'var(--green)',  dot:'var(--green)',  label:'sincronizado',     icon:'✓' },
+    error:   { color:'var(--red)',    dot:'var(--red)',    label:'error de sync',    icon:'✗' },
+    syncing: { color:'var(--amber)',  dot:'var(--amber)',  label:'sincronizando...', icon:'↻' },
+    offline: { color:'var(--text3)', dot:'var(--text3)', label:'sin conexión',      icon:'⚡' }
+  };
+  const c = cfg[s] || cfg.error;
+  el.innerHTML = `
+    <div class="sync-dot" style="background:${c.dot}"></div>
+    <span style="color:${c.color}">${c.label}</span>`;
+  el.title = detail || c.label;
+
+  // Also show toast for meaningful state changes
+  if (s === 'error' && detail) {
+    showSyncToast(detail, false);
+  } else if (s === 'ok' && detail) {
+    showSyncToast(detail, true);
+  }
+}
+
+function showSyncToast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.innerHTML = (ok ? '✓' : '✗') + ' ' + msg;
+  t.style.color = ok ? 'var(--green)' : 'var(--red)';
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => t.classList.remove('show'), ok ? 2500 : 4000);
 }
 
 // ─── Categories helpers ───
