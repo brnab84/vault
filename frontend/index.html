@@ -483,6 +483,34 @@
     #statsChip { display: none !important; }
   }
 
+
+  /* ── Face ID / Passkey ── */
+  .faceid-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 12px; border-radius: var(--radius);
+    background: var(--bg3); border: 1px solid var(--border2);
+    color: var(--text); font-family: 'Syne', sans-serif; font-size: 14px;
+    font-weight: 500; cursor: pointer; transition: all .2s;
+  }
+  .faceid-btn:hover { background: var(--bg4); border-color: var(--accent); }
+  .faceid-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .faceid-icon { font-size: 22px; }
+  .or-divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text3); font-size: 12px; font-family: 'JetBrains Mono', monospace;
+  }
+  .or-divider::before, .or-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .passkey-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .passkey-item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+  }
+  .passkey-item span { flex: 1; font-size: 13px; }
+  .passkey-date { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+
 </style>
 </head>
 <body>
@@ -508,6 +536,13 @@
     </div>
     <div id="authErr" class="auth-err"></div>
     <button class="btn btn-primary" onclick="authSubmit()" id="authBtn">Entrar</button>
+    <div id="faceIdLoginWrap" style="display:none;flex-direction:column;gap:10px">
+      <div class="or-divider">o</div>
+      <button class="faceid-btn" onclick="loginWithPasskey()" id="faceIdLoginBtn">
+        <span class="faceid-icon">🔐</span>
+        <span>Entrar con Face ID / Biometría</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1386,6 +1421,23 @@ function openSettings(){
       </div>
     </div>
 
+    <!-- PASSKEYS / FACE ID -->
+    <div class="settings-section">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Face ID / Biometría
+        <span style="font-size:11px;color:var(--text3);font-weight:400">— inicio de sesión sin contraseña</span>
+      </h3>
+      <div id="passkeyList" class="passkey-list"></div>
+      <div id="passkeySupport" style="font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px"></div>
+      <div class="add-row" style="margin-top:8px">
+        <input type="text" id="passkeyName" placeholder="Nombre del dispositivo (ej: iPhone)" style="flex:1">
+        <button class="btn btn-primary" onclick="registerPasskey()" id="registerPasskeyBtn">
+          Registrar Face ID
+        </button>
+      </div>
+    </div>
+
     <!-- FIELD ORDER -->
     <div class="settings-section">
       <h3>
@@ -1400,6 +1452,7 @@ function openSettings(){
   renderSettingsCats();
   renderSettingsFields();
   renderFieldOrderList();
+  renderPasskeyList();
 }
 
 // ─── Field Order Drag & Drop (touch + mouse) ───
@@ -1689,6 +1742,203 @@ function stopSyncSpin() {
   if (el) el.style.transform = 'none';
 }
 
+
+
+// ─── Face ID / WebAuthn ───
+const WEBAUTHN_SUPPORTED = () => window.PublicKeyCredential !== undefined
+  && typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function';
+
+async function checkPasskeySupport() {
+  if (!WEBAUTHN_SUPPORTED()) return false;
+  try {
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch { return false; }
+}
+
+// Show Face ID button on login screen if supported + user has passkeys
+async function initFaceIdLogin() {
+  const supported = await checkPasskeySupport();
+  const username  = document.getElementById('authUser').value.trim();
+  const wrap      = document.getElementById('faceIdLoginWrap');
+  if (!wrap) return;
+  // Show if supported (user may have passkeys)
+  wrap.style.display = supported ? 'flex' : 'none';
+}
+
+// Auto-check when username is typed
+document.addEventListener('DOMContentLoaded', () => {
+  const userInput = document.getElementById('authUser');
+  if (userInput) {
+    userInput.addEventListener('input', initFaceIdLogin);
+    // Check on load too
+    setTimeout(initFaceIdLogin, 500);
+  }
+});
+
+// ── Register passkey ──
+async function registerPasskey() {
+  const supported = await checkPasskeySupport();
+  if (!supported) {
+    toast('Tu dispositivo no soporta biometría', false);
+    return;
+  }
+  const name = document.getElementById('passkeyName')?.value.trim() || 'Mi dispositivo';
+  const btn  = document.getElementById('registerPasskeyBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
+  try {
+    // 1. Get options from server
+    const options = await api('POST', '/auth/passkey/register/start', {});
+    // 2. Create credential (triggers Face ID prompt)
+    options.challenge = base64urlToBuffer(options.challenge);
+    options.user.id   = base64urlToBuffer(options.user.id);
+    if (options.excludeCredentials) {
+      options.excludeCredentials = options.excludeCredentials.map(c => ({
+        ...c, id: base64urlToBuffer(c.id)
+      }));
+    }
+    const credential = await navigator.credentials.create({ publicKey: options });
+    // 3. Send to server
+    const body = {
+      id:       credential.id,
+      rawId:    bufferToBase64url(credential.rawId),
+      type:     credential.type,
+      response: {
+        clientDataJSON:    bufferToBase64url(credential.response.clientDataJSON),
+        attestationObject: bufferToBase64url(credential.response.attestationObject),
+        transports:        credential.response.getTransports?.() || []
+      }
+    };
+    await api('POST', '/auth/passkey/register/finish', { body, name });
+    toast('Face ID registrado correctamente ✓');
+    if (document.getElementById('passkeyName')) document.getElementById('passkeyName').value = '';
+    await renderPasskeyList();
+  } catch(e) {
+    if (e.name === 'NotAllowedError') toast('Cancelado por el usuario', false);
+    else toast('Error: ' + e.message, false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Registrar Face ID'; }
+  }
+}
+
+// ── Login with passkey ──
+async function loginWithPasskey() {
+  const username = document.getElementById('authUser').value.trim();
+  if (!username) { document.getElementById('authErr').textContent = 'Ingresa tu usuario primero'; return; }
+  const btn = document.getElementById('faceIdLoginBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="faceid-icon">⏳</span> Autenticando...'; }
+  try {
+    // 1. Get options
+    const options = await api('POST', '/auth/passkey/login/start', { username });
+    // 2. Authenticate (triggers Face ID)
+    options.challenge = base64urlToBuffer(options.challenge);
+    if (options.allowCredentials) {
+      options.allowCredentials = options.allowCredentials.map(c => ({
+        ...c, id: base64urlToBuffer(c.id)
+      }));
+    }
+    const assertion = await navigator.credentials.get({ publicKey: options });
+    // 3. Verify
+    const body = {
+      id:       assertion.id,
+      rawId:    bufferToBase64url(assertion.rawId),
+      type:     assertion.type,
+      response: {
+        clientDataJSON:    bufferToBase64url(assertion.response.clientDataJSON),
+        authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+        signature:         bufferToBase64url(assertion.response.signature),
+        userHandle:        assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+      }
+    };
+    const data = await api('POST', '/auth/passkey/login/finish', { username, body });
+    token = data.token;
+    localStorage.setItem('vault_token', token);
+    currentUsername = data.username;
+    // Get master key from device storage
+    const savedMaster = localStorage.getItem('vault_master_' + data.username);
+    if (savedMaster) {
+      masterKey = savedMaster;
+    } else {
+      const m = prompt('Primera vez con Face ID: ingresa tu contraseña maestra para vincularla:');
+      if (m) { masterKey = m; localStorage.setItem('vault_master_' + data.username, m); }
+      else { token = null; return; }
+    }
+    document.getElementById('usernameChip').textContent = data.username;
+    const mc = document.getElementById('usernameChipMobile');
+    if (mc) mc.textContent = data.username;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appView').style.display = 'block';
+    loadVersion();
+    await syncAll();
+  } catch(e) {
+    if (e.name === 'NotAllowedError') document.getElementById('authErr').textContent = 'Cancelado';
+    else if (e.message.includes('Sin passkeys')) {
+      document.getElementById('authErr').textContent = 'No tienes Face ID registrado. Inicia sesión normalmente y regístralo en Parametrización.';
+    }
+    else document.getElementById('authErr').textContent = e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="faceid-icon">🔐</span><span>Entrar con Face ID / Biometría</span>'; }
+  }
+}
+
+// ── Render passkey list in settings ──
+async function renderPasskeyList() {
+  const list    = document.getElementById('passkeyList');
+  const support = document.getElementById('passkeySupport');
+  if (!list) return;
+
+  const supported = await checkPasskeySupport();
+  if (support) {
+    support.textContent = supported
+      ? '✓ Este dispositivo soporta autenticación biométrica'
+      : '✗ Este dispositivo no soporta biometría (requiere iOS 16+ / Android 9+)';
+    support.style.color = supported ? 'var(--green)' : 'var(--text3)';
+  }
+
+  try {
+    const data = await api('GET', '/auth/me');
+    const passkeys = data.passkeys || [];
+    if (!passkeys.length) {
+      list.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px">Sin dispositivos registrados.</div>';
+      return;
+    }
+    list.innerHTML = passkeys.map(p => `
+      <div class="passkey-item">
+        <span>🔐</span>
+        <div style="flex:1">
+          <div style="font-size:14px">${esc(p.name)}</div>
+          <div class="passkey-date">${new Date(p.createdAt).toLocaleDateString('es')}</div>
+        </div>
+        <button class="btn-icon danger" onclick="deletePasskey('${p.id}')" title="Eliminar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text3)">Error cargando passkeys</div>';
+  }
+}
+
+async function deletePasskey(id) {
+  try {
+    await api('DELETE', '/auth/passkey/' + id);
+    toast('Dispositivo eliminado');
+    renderPasskeyList();
+  } catch(e) { toast('Error: ' + e.message, false); }
+}
+
+// ── Base64url helpers ──
+function base64urlToBuffer(b64url) {
+  const base64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(base64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+function bufferToBase64url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
 
 // ─── Sync helpers ───
 function _syncModal(state, title, msg, pct) {
