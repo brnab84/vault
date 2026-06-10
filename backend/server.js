@@ -12,6 +12,7 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
+app.set('trust proxy', 1); // Railway corre detrás de un proxy — IP real del cliente para rate-limit
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));

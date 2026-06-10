@@ -1,7 +1,8 @@
 {
-  "version": "2.6.2",
-  "build": "2026-06-06",
+  "version": "2.6.3",
+  "build": "2026-06-10",
   "changelog": [
+    "v2.6.3 - Hardening: rate-limit anti fuerza-bruta + generador crypto-seguro + fix XSS",
     "v2.6.2 - Hotfix: Face ID fuerza autenticador nativo, no apps externas",
     "v2.6.1 - Hotfix: WebCrypto polyfill para Railway Node < 19",
     "v2.6.0 - Face ID / Touch ID / Biometría via WebAuthn",

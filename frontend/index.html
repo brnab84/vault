@@ -1223,10 +1223,10 @@ function renderEntries() {
         <span class="cat-label" style="background:${cat.color}22;color:${cat.color}">${esc(cat.label)}</span>
       </div>
       <div class="card-meta">
-        ${e.ip?`<span class="meta-pill pill-ip" onclick="copyRaw('${esc(e.ip)}','IP')" title="Click para copiar IP">
+        ${e.ip?`<span class="meta-pill pill-ip" onclick="copyRaw(entries[${ri}].ip,'IP')" title="Click para copiar IP">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="13" width="20" height="6" rx="2"/></svg>
           ${esc(e.ip)}${e.port?':'+esc(e.port):''}</span>`:''}
-        ${e.user?`<span class="meta-pill pill-user" onclick="copyRaw('${esc(e.user)}','Usuario')" title="Click para copiar usuario">
+        ${e.user?`<span class="meta-pill pill-user" onclick="copyRaw(entries[${ri}].user,'Usuario')" title="Click para copiar usuario">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           ${esc(e.user)}</span>`:''}
         ${e.pass?`<span class="meta-pill pill-pass" onclick="copyRaw(entries[${ri}].pass,'Contraseña')" title="Click para copiar contraseña">
@@ -1668,9 +1668,13 @@ function generatePassword(){
   if(!sets.length)return'';
   const all=sets.join('');
   const arr=new Uint8Array(len);crypto.getRandomValues(arr);
-  let pw=sets.map(s=>s[arr[0]%s.length]).join('');
-  for(let i=sets.length;i<len;i++)pw+=all[arr[i]%all.length];
-  return pw.split('').sort(()=>Math.random()-.5).join('');
+  // Garantiza al menos un caracter de cada conjunto seleccionado (byte distinto por posición)
+  const chars=sets.map((s,i)=>s[arr[i]%s.length]);
+  for(let i=sets.length;i<len;i++)chars.push(all[arr[i]%all.length]);
+  // Barajado Fisher-Yates con bytes criptográficos
+  const sh=new Uint8Array(chars.length);crypto.getRandomValues(sh);
+  for(let i=chars.length-1;i>0;i--){const j=sh[i]%(i+1);const t=chars[i];chars[i]=chars[j];chars[j]=t;}
+  return chars.join('');
 }
 function updateGen(){
   document.getElementById('genLenVal').textContent=document.getElementById('genLen').value;

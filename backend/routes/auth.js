@@ -10,6 +10,22 @@ const {
   verifyAuthenticationResponse
 } = require('@simplewebauthn/server');
 
+const { rateLimit, ipOf } = require('../middleware/rateLimit');
+
+// ── Rate limiters (anti fuerza-bruta) ──
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  keyFn: (req) => 'login:' + ipOf(req) + ':' + (req.body?.username || '').toLowerCase()
+});
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 10,
+  keyFn: (req) => 'register:' + ipOf(req)
+});
+const passkeyLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 20,
+  keyFn: (req) => 'pklogin:' + ipOf(req) + ':' + (req.body?.username || '').toLowerCase()
+});
+
 const sign = (user) =>
   jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -27,7 +43,7 @@ const getRpId = (req) => {
 };
 
 // ── Standard Auth ──────────────────────────────────────────
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Faltan campos' });
@@ -39,7 +55,7 @@ router.post('/register', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await User.findOne({ username: username?.toLowerCase() });
@@ -112,7 +128,7 @@ router.post('/passkey/register/finish', authMw, async (req, res) => {
 });
 
 // ── WebAuthn Authentication ────────────────────────────────
-router.post('/passkey/login/start', async (req, res) => {
+router.post('/passkey/login/start', passkeyLoginLimiter, async (req, res) => {
   try {
     const { username } = req.body;
     const user = await User.findOne({ username: username?.toLowerCase() });
@@ -132,7 +148,7 @@ router.post('/passkey/login/start', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/passkey/login/finish', async (req, res) => {
+router.post('/passkey/login/finish', passkeyLoginLimiter, async (req, res) => {
   try {
     const { username, body } = req.body;
     const user = await User.findOne({ username: username?.toLowerCase() });
