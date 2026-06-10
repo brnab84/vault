@@ -1,7 +1,8 @@
 {
-  "version": "2.7.0",
+  "version": "2.8.0",
   "build": "2026-06-10",
   "changelog": [
+    "v2.8.0 - Cifrado completo: nombre y categoría también se cifran client-side (vault 100% cifrado salvo metadatos de fecha)",
     "v2.7.0 - Cifrado client-side de IP, usuario, URL, puerto, notas y tags (antes solo la contraseña) + migración automática retrocompatible",
     "v2.6.3 - Hardening: rate-limit anti fuerza-bruta + generador crypto-seguro + fix XSS",
     "v2.6.2 - Hotfix: Face ID fuerza autenticador nativo, no apps externas",

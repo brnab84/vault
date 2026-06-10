@@ -784,7 +784,7 @@ async function decryptVal(b64, master) {
 }
 
 // ─── Cifrado de campos con marcador (retrocompatible) ───
-// Las entradas antiguas guardan IP/usuario/URL/puerto/notas/tags en texto plano.
+// Las entradas antiguas guardan nombre/categoría/IP/usuario/URL/puerto/notas/tags en texto plano.
 // Marcamos los valores cifrados con un prefijo inequívoco (carácter de control +
 // versión). Si un valor NO tiene el prefijo, se asume texto plano legacy y se
 // devuelve tal cual — así los datos existentes nunca se rompen al leer.
@@ -808,7 +808,7 @@ async function decryptTags(tagsArr, master) {
 }
 function isLegacyEntry(e) {
   const f = v => typeof v === 'string' && v !== '' && !v.startsWith(ENC_TAG);
-  if (f(e.ip) || f(e.port) || f(e.user) || f(e.url) || f(e.notes)) return true;
+  if (f(e.name) || f(e.cat) || f(e.ip) || f(e.port) || f(e.user) || f(e.url) || f(e.notes)) return true;
   if (Array.isArray(e.tags) && e.tags.some(f)) return true;
   return false;
 }
@@ -1108,6 +1108,8 @@ async function syncAll() {
     entries = await Promise.all(rawEntries.map(async e => {
       try {
         const dec = { ...e,
+          name:  await decryptField(e.name,  masterKey),
+          cat:   await decryptField(e.cat,   masterKey),
           ip:    await decryptField(e.ip,    masterKey),
           port:  await decryptField(e.port,  masterKey),
           user:  await decryptField(e.user,  masterKey),
@@ -1157,8 +1159,8 @@ async function migrateLegacyEntries(list) {
   for (const e of list) {
     try {
       const payload = {
-        name: e.name,
-        cat:  e.cat,
+        name:  await encryptField(e.name || '', masterKey),
+        cat:   await encryptField(e.cat  || '', masterKey),
         ip:    await encryptField(e.ip    || '', masterKey),
         port:  await encryptField(e.port  || '', masterKey),
         user:  await encryptField(e.user  || '', masterKey),
@@ -1172,6 +1174,8 @@ async function migrateLegacyEntries(list) {
       };
       // Verificación round-trip antes de escribir
       const verified =
+        (await decryptField(payload.name,  masterKey)) === (e.name  || '') &&
+        (await decryptField(payload.cat,   masterKey)) === (e.cat   || '') &&
         (await decryptField(payload.ip,    masterKey)) === (e.ip    || '') &&
         (await decryptField(payload.port,  masterKey)) === (e.port  || '') &&
         (await decryptField(payload.user,  masterKey)) === (e.user  || '') &&
@@ -1408,7 +1412,8 @@ async function saveEntry() {
   (settings.customFields||[]).forEach(f=>{ const el=document.getElementById('f_'+f.key); customPlain[f.key]=el?el.value:''; });
 
   const payload={
-    name, cat,
+    name:  await encryptField(name, masterKey),
+    cat:   await encryptField(cat,  masterKey),
     ip:    await encryptField(ipPlain,    masterKey),
     port:  await encryptField(portPlain,  masterKey),
     user:  await encryptField(userPlain,  masterKey),
@@ -1426,6 +1431,7 @@ async function saveEntry() {
       saved=await api('POST','/entries',payload);
     }
     // El server devuelve los campos cifrados; reponemos los valores en claro en memoria
+    saved.name=name; saved.cat=cat;
     saved.ip=ipPlain; saved.port=portPlain; saved.user=userPlain;
     saved.url=urlPlain; saved.notes=notesPlain; saved.tags=tagsPlain; saved.pass=passPlain;
     saved.customFields=(saved.customFields||[]).map(cf=>({...cf, value: customPlain[cf.key]||''}));
