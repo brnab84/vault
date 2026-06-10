@@ -783,6 +783,36 @@ async function decryptVal(b64, master) {
   } catch { return '[error al desencriptar]'; }
 }
 
+// ─── Cifrado de campos con marcador (retrocompatible) ───
+// Las entradas antiguas guardan IP/usuario/URL/puerto/notas/tags en texto plano.
+// Marcamos los valores cifrados con un prefijo inequívoco (carácter de control +
+// versión). Si un valor NO tiene el prefijo, se asume texto plano legacy y se
+// devuelve tal cual — así los datos existentes nunca se rompen al leer.
+const ENC_TAG = String.fromCharCode(1) + 'v1:'; // control char (1) + version: imposible en texto plano legacy
+async function encryptField(plain, master) {
+  if (plain === undefined || plain === null || plain === '') return '';
+  return ENC_TAG + await encryptVal(plain, master);
+}
+async function decryptField(value, master) {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value !== 'string' || !value.startsWith(ENC_TAG)) return value; // legacy texto plano
+  return await decryptVal(value.slice(ENC_TAG.length), master);
+}
+async function encryptTags(tagsArr, master) {
+  if (!Array.isArray(tagsArr)) return [];
+  return Promise.all(tagsArr.map(t => encryptField(t, master)));
+}
+async function decryptTags(tagsArr, master) {
+  if (!Array.isArray(tagsArr)) return [];
+  return Promise.all(tagsArr.map(t => decryptField(t, master)));
+}
+function isLegacyEntry(e) {
+  const f = v => typeof v === 'string' && v !== '' && !v.startsWith(ENC_TAG);
+  if (f(e.ip) || f(e.port) || f(e.user) || f(e.url) || f(e.notes)) return true;
+  if (Array.isArray(e.tags) && e.tags.some(f)) return true;
+  return false;
+}
+
 // ─── API ───
 async function api(method, path, body) {
   const res = await fetch(API + path, {
@@ -1074,18 +1104,31 @@ async function syncAll() {
     // Decrypt
     _syncModal('syncing', 'Sincronizando...', 'Descifrando datos...', 75);
     let errs = 0;
+    const toMigrate = [];
     entries = await Promise.all(rawEntries.map(async e => {
       try {
-        return { ...e,
-          pass: await decryptVal(e.passEncrypted, masterKey),
+        const dec = { ...e,
+          ip:    await decryptField(e.ip,    masterKey),
+          port:  await decryptField(e.port,  masterKey),
+          user:  await decryptField(e.user,  masterKey),
+          url:   await decryptField(e.url,   masterKey),
+          notes: await decryptField(e.notes, masterKey),
+          tags:  await decryptTags(e.tags,   masterKey),
+          pass:  await decryptVal(e.passEncrypted, masterKey),
           customFields: await Promise.all((e.customFields||[]).map(async cf => ({
             ...cf, value: await decryptVal(cf.valueEncrypted, masterKey)
           })))
         };
+        if (isLegacyEntry(e)) toMigrate.push(dec);
+        return dec;
       } catch(_) { errs++; return { ...e, pass:'', customFields:(e.customFields||[]).map(cf=>({...cf,value:''})) }; }
     }));
 
     renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts(); renderCatNavMobile();
+
+    // Migración retrocompatible: cifra en segundo plano las entradas que aún
+    // tengan campos en texto plano. No bloquea la UI; la lectura ya funciona.
+    if (masterKey && toMigrate.length) migrateLegacyEntries(toMigrate);
 
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);
     const n = entries.length;
@@ -1101,6 +1144,49 @@ async function syncAll() {
     _syncModal('error', 'Error', msg, 0);
     setSyncDot('var(--red)', '✗ error');
     try { renderCatNav(); renderCategorySelect(); renderEntries(); updateCounts(); renderCatNavMobile(); } catch(_){}
+  }
+}
+
+// Re-cifra en segundo plano las entradas con campos de acceso en texto plano.
+// Verifica cada cifrado (round-trip) ANTES de escribir: nunca guarda algo que
+// no se pueda volver a leer. Cualquier error se omite sin afectar la lectura
+// (que ya es retrocompatible).
+async function migrateLegacyEntries(list) {
+  if (!masterKey || !list || !list.length) return;
+  let migrated = 0;
+  for (const e of list) {
+    try {
+      const payload = {
+        name: e.name,
+        cat:  e.cat,
+        ip:    await encryptField(e.ip    || '', masterKey),
+        port:  await encryptField(e.port  || '', masterKey),
+        user:  await encryptField(e.user  || '', masterKey),
+        url:   await encryptField(e.url   || '', masterKey),
+        notes: await encryptField(e.notes || '', masterKey),
+        tags:  await encryptTags(e.tags   || [], masterKey),
+        passEncrypted: e.passEncrypted, // ya estaba cifrado, se conserva intacto
+        customFields: (e.customFields||[]).map(cf => ({
+          key: cf.key, label: cf.label, valueEncrypted: cf.valueEncrypted, isPassword: cf.isPassword
+        }))
+      };
+      // Verificación round-trip antes de escribir
+      const verified =
+        (await decryptField(payload.ip,    masterKey)) === (e.ip    || '') &&
+        (await decryptField(payload.port,  masterKey)) === (e.port  || '') &&
+        (await decryptField(payload.user,  masterKey)) === (e.user  || '') &&
+        (await decryptField(payload.url,   masterKey)) === (e.url   || '') &&
+        (await decryptField(payload.notes, masterKey)) === (e.notes || '');
+      if (!verified) { console.warn('[migración] verificación falló, se omite', e._id); continue; }
+      await api('PUT', '/entries/' + e._id, payload);
+      migrated++;
+    } catch(err) {
+      console.warn('[migración] error en entrada', e._id, err && err.message);
+    }
+  }
+  if (migrated) {
+    console.log('[migración] ' + migrated + ' entrada(s) cifradas');
+    try { toast(migrated + ' entrada' + (migrated!==1?'s':'') + ' protegida' + (migrated!==1?'s':'') + ' con cifrado'); } catch(_){}
   }
 }
 
@@ -1298,37 +1384,52 @@ async function saveEntry() {
   if (!nameEl) { toast('Error al leer el formulario. Intenta cerrar y abrir de nuevo.', false); return; }
   const name = nameEl.value.trim();
   if(!name){toast('El nombre es requerido',false);return;}
-  const passPlain=document.getElementById('f_pass')?.value||'';
+
+  // Valores en claro del formulario
+  const ipPlain    = (document.getElementById('f_ip')?.value||'').trim();
+  const portPlain  = (document.getElementById('f_port')?.value||'').trim();
+  const userPlain  = (document.getElementById('f_user')?.value||'').trim();
+  const urlPlain   = (document.getElementById('f_url')?.value||'').trim();
+  const notesPlain = (document.getElementById('f_notes')?.value||'').trim();
+  const passPlain  = document.getElementById('f_pass')?.value||'';
+  const tagsRaw    = document.getElementById('f_tags')?.value||'';
+  const tagsPlain  = tagsRaw.split(',').map(t=>t.trim()).filter(Boolean);
+  const cat        = document.getElementById('f_cat')?.value||'other';
+
+  // Cifrado client-side: contraseña, campos de acceso y campos personalizados
   const passEncrypted=await encryptVal(passPlain,masterKey);
-  const tagsRaw=document.getElementById('f_tags')?.value||'';
-  const tags=tagsRaw.split(',').map(t=>t.trim()).filter(Boolean);
   const customFields=await Promise.all((settings.customFields||[]).map(async f=>{
     const el=document.getElementById('f_'+f.key);
     const val=el?el.value:'';
     return {key:f.key,label:f.label,valueEncrypted:await encryptVal(val,masterKey),isPassword:f.type==='password'};
   }));
+  // valores en claro de campos personalizados, para reflejarlos en memoria tras guardar
+  const customPlain={};
+  (settings.customFields||[]).forEach(f=>{ const el=document.getElementById('f_'+f.key); customPlain[f.key]=el?el.value:''; });
+
   const payload={
-    name,cat:document.getElementById('f_cat')?.value||'other',
-    ip:(document.getElementById('f_ip')?.value||'').trim(),
-    port:(document.getElementById('f_port')?.value||'').trim(),
-    user:(document.getElementById('f_user')?.value||'').trim(),
-    passEncrypted,url:(document.getElementById('f_url')?.value||'').trim(),
-    tags,notes:(document.getElementById('f_notes')?.value||'').trim(),
+    name, cat,
+    ip:    await encryptField(ipPlain,    masterKey),
+    port:  await encryptField(portPlain,  masterKey),
+    user:  await encryptField(userPlain,  masterKey),
+    passEncrypted,
+    url:   await encryptField(urlPlain,   masterKey),
+    tags:  await encryptTags(tagsPlain,   masterKey),
+    notes: await encryptField(notesPlain, masterKey),
     customFields
   };
   try {
     let saved;
     if(editIdx>=0){
       saved=await api('PUT','/entries/'+entries[editIdx]._id,payload);
-      saved.pass=passPlain;
-      saved.customFields=saved.customFields.map((cf,i)=>({...cf,value:(settings.customFields[i]?document.getElementById('cf_'+cf.key)?.value:'')||''}));
-      entries[editIdx]=saved;
     } else {
       saved=await api('POST','/entries',payload);
-      saved.pass=passPlain;
-      saved.customFields=(saved.customFields||[]).map(cf=>({...cf,value:document.getElementById('cf_'+cf.key)?.value||''}));
-      entries.unshift(saved);
     }
+    // El server devuelve los campos cifrados; reponemos los valores en claro en memoria
+    saved.ip=ipPlain; saved.port=portPlain; saved.user=userPlain;
+    saved.url=urlPlain; saved.notes=notesPlain; saved.tags=tagsPlain; saved.pass=passPlain;
+    saved.customFields=(saved.customFields||[]).map(cf=>({...cf, value: customPlain[cf.key]||''}));
+    if(editIdx>=0) entries[editIdx]=saved; else entries.unshift(saved);
     closeModal('addModal');renderEntries();updateCounts();setSyncStatus('ok');
     toast(editIdx>=0?'Entrada actualizada':'Entrada guardada');
   } catch(e){toast('Error: '+e.message,false);}

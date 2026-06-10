@@ -1,7 +1,8 @@
 {
-  "version": "2.6.3",
+  "version": "2.7.0",
   "build": "2026-06-10",
   "changelog": [
+    "v2.7.0 - Cifrado client-side de IP, usuario, URL, puerto, notas y tags (antes solo la contraseña) + migración automática retrocompatible",
     "v2.6.3 - Hardening: rate-limit anti fuerza-bruta + generador crypto-seguro + fix XSS",
     "v2.6.2 - Hotfix: Face ID fuerza autenticador nativo, no apps externas",
     "v2.6.1 - Hotfix: WebCrypto polyfill para Railway Node < 19",
