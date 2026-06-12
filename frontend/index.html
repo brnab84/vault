@@ -1308,7 +1308,7 @@ function renderEntries() {
         </div>
         <div style="flex:1;min-width:0">
           <div class="card-title">${esc(e.name)}</div>
-          <div class="card-sub">${e.url?esc(e.url):(e.ip?esc(e.ip):'—')}</div>
+          <div class="card-sub">${(e.tags&&e.tags.length)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px;opacity:.65"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>${esc(e.tags.join(', '))}`:(e.url?esc(e.url):'—')}</div>
         </div>
         <span class="cat-label" style="background:${cat.color}22;color:${cat.color}">${esc(cat.label)}</span>
       </div>
@@ -1806,7 +1806,8 @@ function closeModal(id){
 function toggleVis(id){const i=document.getElementById(id);i.type=i.type==='password'?'text':'password';}
 let toastT;
 function toast(msg,ok=true){const t=document.getElementById('toast');t.innerHTML=(ok?'✓':'✗')+' '+msg;t.style.color=ok?'var(--green)':'var(--red)';t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2500);}
-document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');}));
+// El modal de entrada (addModal) NO se cierra al hacer clic fuera, para no perder lo que se escribe
+document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov && ov.id!=='addModal')ov.classList.remove('open');}));
 
 
 
