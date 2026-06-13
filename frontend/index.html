@@ -95,6 +95,19 @@
   .pill-pass{background:rgba(251,191,36,0.1);color:#fcd05a;}
   .card-footer{display:flex;justify-content:flex-end;gap:4px;margin-top:2px;}
   .cat-label{font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:4px;font-weight:600;}
+  /* Agrupación de la vista */
+  .grp-toggle{font-size:12px;font-family:'JetBrains Mono',monospace;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg3);color:var(--text2);}
+  .grp-toggle:hover{color:var(--text);border-color:var(--border2);}
+  .grp-toggle.active{background:rgba(79,143,255,0.12);color:var(--accent);border-color:var(--accent);}
+  .grp-section{margin-bottom:10px;}
+  .grp-head{display:flex;align-items:center;gap:8px;padding:8px 6px;cursor:pointer;border-radius:var(--radius);user-select:none;}
+  .grp-head:hover{background:var(--bg2);}
+  .grp-name{font-size:14px;font-weight:600;color:var(--text);}
+  .grp-count{font-size:11px;font-family:'JetBrains Mono',monospace;background:var(--bg4);color:var(--text2);padding:1px 8px;border-radius:10px;}
+  .grp-chev{color:var(--text3);transition:transform .15s;flex-shrink:0;}
+  .grp-section.collapsed .grp-chev{transform:rotate(-90deg);}
+  .grp-section.collapsed .grp-body{display:none;}
+  .grp-body{margin-bottom:6px;}
 
   .overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:100;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;padding:1rem;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
   .overlay.open{display:-webkit-box !important;display:-ms-flexbox !important;display:flex !important;}
@@ -830,6 +843,7 @@ async function api(method, path, body) {
 const BUILTIN_FIELDS = [
   { key:'name',  label:'Nombre',         type:'text',     required:true,  paired:'cat',  placeholder:'SAP B1 Producción' },
   { key:'cat',   label:'Categoría',      type:'select',   required:true,  paired:'name', placeholder:'' },
+  { key:'group', label:'Grupo',          type:'text',     required:false, paired:null,   placeholder:'ej. INTERAGRO, SAP, Cliente X' },
   { key:'ip',    label:'IP / Hostname',  type:'text',     required:false, paired:'port', placeholder:'192.168.1.10' },
   { key:'port',  label:'Puerto',         type:'text',     required:false, paired:'ip',   placeholder:'22 · 3389' },
   { key:'user',  label:'Usuario',        type:'text',     required:false, paired:null,   placeholder:'admin · root' },
@@ -917,6 +931,7 @@ function renderEntryFormFallback(d={}) {
       <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="f_name" value="${esc(d.name||'')}" placeholder="SAP B1 Producción"></div>
       <div class="form-group"><label class="form-label">Categoría</label><select id="f_cat">${catOpts}</select></div>
     </div>
+    <div class="form-group"><label class="form-label">Grupo</label><input type="text" id="f_group" value="${esc(d.group||'')}" placeholder="ej. INTERAGRO, SAP, Cliente X"></div>
     <div class="form-row2">
       <div class="form-group"><label class="form-label">IP / Hostname</label><input type="text" id="f_ip" value="${esc(d.ip||'')}" placeholder="192.168.1.10"></div>
       <div class="form-group"><label class="form-label">Puerto</label><input type="text" id="f_port" value="${esc(d.port||'')}" placeholder="22 · 3389"></div>
@@ -1110,6 +1125,7 @@ async function syncAll() {
         const dec = { ...e,
           name:  await decryptField(e.name,  masterKey),
           cat:   await decryptField(e.cat,   masterKey),
+          group: await decryptField(e.group, masterKey),
           ip:    await decryptField(e.ip,    masterKey),
           port:  await decryptField(e.port,  masterKey),
           user:  await decryptField(e.user,  masterKey),
@@ -1286,19 +1302,28 @@ function setCat(el) {
   renderEntries();
 }
 
-function renderEntries() {
-  const grid=document.getElementById('entriesGrid');
-  if(!grid) return;
-  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
-  const list=entries.filter(e=>{
-    const catOk=activeCat==='all'||e.cat===activeCat;
-    const searchOk=!q||[e.name,e.ip,e.user,e.url,e.notes,...(e.tags||[])].some(v=>v&&v.toLowerCase().includes(q));
-    return catOk&&searchOk;
-  });
-  const chip=document.getElementById('statsChip');
-  if(chip) chip.textContent=list.length+' entrada'+(list.length!==1?'s':'');
-  if(!list.length){grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><p>Sin entradas</p></div>`;return;}
-  grid.innerHTML=list.map(e=>{
+// ─── Agrupación de la vista ───
+let groupBy='none';                 // 'none' | 'group' | 'cat'
+const _collapsedGroups=new Set();
+let _groupOrder=[];
+function setGroupBy(g){ groupBy=g; _collapsedGroups.clear(); renderEntries(); }
+function toggleGroup(i){ const n=_groupOrder[i]; if(_collapsedGroups.has(n)) _collapsedGroups.delete(n); else _collapsedGroups.add(n); renderEntries(); }
+function ensureGroupBar(){
+  const mc=document.getElementById('mainContent'); const grid=document.getElementById('entriesGrid');
+  if(!mc||!grid) return;
+  let bar=document.getElementById('groupBar');
+  if(!bar){
+    bar=document.createElement('div'); bar.id='groupBar';
+    bar.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap';
+    bar.innerHTML=`<span style="font-size:12px;color:var(--text2);font-family:'JetBrains Mono',monospace;margin-right:2px">Agrupar:</span>`+
+      `<button class="grp-toggle" data-g="none" onclick="setGroupBy('none')">Ninguno</button>`+
+      `<button class="grp-toggle" data-g="group" onclick="setGroupBy('group')">Grupo</button>`+
+      `<button class="grp-toggle" data-g="cat" onclick="setGroupBy('cat')">Categoría</button>`;
+    mc.insertBefore(bar, grid);
+  }
+  bar.querySelectorAll('.grp-toggle').forEach(b=>b.classList.toggle('active', b.dataset.g===groupBy));
+}
+function cardHTML(e){
     const ri=entries.indexOf(e);
     const cat=getCat(e.cat);
     return `<div class="entry-card" style="--cat-color:${cat.color}">
@@ -1329,6 +1354,44 @@ function renderEntries() {
         <button class="btn-icon danger" onclick="confirmDelete(${ri})" title="Eliminar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
       </div>
     </div>`;
+}
+
+function renderEntries(){
+  const grid=document.getElementById('entriesGrid');
+  if(!grid) return;
+  ensureGroupBar();
+  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
+  const list=entries.filter(e=>{
+    const catOk=activeCat==='all'||e.cat===activeCat;
+    const searchOk=!q||[e.name,e.ip,e.user,e.url,e.notes,e.group,...(e.tags||[])].some(v=>v&&v.toLowerCase().includes(q));
+    return catOk&&searchOk;
+  });
+  const chip=document.getElementById('statsChip');
+  if(chip) chip.textContent=list.length+' entrada'+(list.length!==1?'s':'');
+  if(!list.length){grid.className='entry-grid';grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><p>Sin entradas</p></div>`;return;}
+  if(groupBy==='none'){
+    grid.className='entry-grid';
+    grid.innerHTML=list.map(cardHTML).join('');
+    return;
+  }
+  grid.className='';
+  const groups={};
+  list.forEach(e=>{
+    const k = groupBy==='cat' ? getCat(e.cat).label : ((e.group||'').trim() || '(Sin grupo)');
+    (groups[k]=groups[k]||[]).push(e);
+  });
+  _groupOrder=Object.keys(groups).sort((a,b)=> a==='(Sin grupo)'?1 : b==='(Sin grupo)'?-1 : a.localeCompare(b,'es'));
+  grid.innerHTML=_groupOrder.map((name,i)=>{
+    const items=groups[name];
+    const collapsed=_collapsedGroups.has(name);
+    return `<div class="grp-section${collapsed?' collapsed':''}">
+      <div class="grp-head" onclick="toggleGroup(${i})">
+        <svg class="grp-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        <span class="grp-name">${esc(name)}</span>
+        <span class="grp-count">${items.length}</span>
+      </div>
+      <div class="grp-body entry-grid">${items.map(cardHTML).join('')}</div>
+    </div>`;
   }).join('');
 }
 
@@ -1351,7 +1414,7 @@ function editEntry(idx) {
   const e=entries[idx];
   document.getElementById('modalTitleTxt').textContent='Editar entrada';
   renderEntryForm({
-    name:e.name||'', cat:e.cat||'other', ip:e.ip||'', port:e.port||'',
+    name:e.name||'', cat:e.cat||'other', group:e.group||'', ip:e.ip||'', port:e.port||'',
     user:e.user||'', pass:e.pass||'', url:e.url||'',
     tags:(e.tags||[]).join(', '), notes:e.notes||'',
     ...(e.customFields||[]).reduce((acc,cf)=>({...acc,[cf.key]:cf.value||''}),{})
@@ -1399,6 +1462,7 @@ async function saveEntry() {
   const tagsRaw    = document.getElementById('f_tags')?.value||'';
   const tagsPlain  = tagsRaw.split(',').map(t=>t.trim()).filter(Boolean);
   const cat        = document.getElementById('f_cat')?.value||'other';
+  const groupPlain = (document.getElementById('f_group')?.value||'').trim();
 
   // Cifrado client-side: contraseña, campos de acceso y campos personalizados
   const passEncrypted=await encryptVal(passPlain,masterKey);
@@ -1414,6 +1478,7 @@ async function saveEntry() {
   const payload={
     name:  await encryptField(name, masterKey),
     cat:   await encryptField(cat,  masterKey),
+    group: await encryptField(groupPlain, masterKey),
     ip:    await encryptField(ipPlain,    masterKey),
     port:  await encryptField(portPlain,  masterKey),
     user:  await encryptField(userPlain,  masterKey),
@@ -1431,7 +1496,7 @@ async function saveEntry() {
       saved=await api('POST','/entries',payload);
     }
     // El server devuelve los campos cifrados; reponemos los valores en claro en memoria
-    saved.name=name; saved.cat=cat;
+    saved.name=name; saved.cat=cat; saved.group=groupPlain;
     saved.ip=ipPlain; saved.port=portPlain; saved.user=userPlain;
     saved.url=urlPlain; saved.notes=notesPlain; saved.tags=tagsPlain; saved.pass=passPlain;
     saved.customFields=(saved.customFields||[]).map(cf=>({...cf, value: customPlain[cf.key]||''}));
