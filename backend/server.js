@@ -6,6 +6,23 @@ if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
 }
 
+// ── Chequeo de JWT_SECRET ──
+// Falta el secreto -> no se puede firmar/verificar nada, mejor no arrancar.
+// Es el valor que se filtró en el repo -> advertencia fuerte (NO se sale para no
+// tumbar producción; rotar en Railway y luego se puede endurecer a process.exit).
+const LEAKED_JWT_SECRET = 'VaultApp2024_SuperSecretKey_MinLength32chars';
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: falta JWT_SECRET en las variables de entorno.');
+  process.exit(1);
+}
+if (process.env.JWT_SECRET === LEAKED_JWT_SECRET) {
+  console.warn('==================== ADVERTENCIA DE SEGURIDAD ====================');
+  console.warn(' JWT_SECRET es el valor que quedó filtrado en el repositorio.');
+  console.warn(' Cualquiera con acceso al repo puede forjar sesiones de usuarios.');
+  console.warn(' ROTALO YA en las variables de entorno de Railway.');
+  console.warn('==================================================================');
+}
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -13,6 +30,33 @@ const path = require('path');
 
 const app = express();
 app.set('trust proxy', 1); // Railway corre detrás de un proxy — IP real del cliente para rate-limit
+
+// ── Cabeceras de seguridad ──
+// CSP verificada contra los recursos reales: todo es inline o same-origin salvo
+// Google Fonts (googleapis para el CSS + gstatic para las fuentes).
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'"
+].join('; ');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Content-Security-Policy', CSP);
+  next();
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));

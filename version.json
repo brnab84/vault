@@ -1,7 +1,8 @@
 {
-  "version": "2.9.0",
+  "version": "2.9.1",
   "build": "2026-06-11",
   "changelog": [
+    "v2.9.1 - Seguridad: cabeceras (CSP, HSTS, X-Frame-Options, nosniff) + advertencia si el JWT_SECRET es el filtrado + SW no intercepta cross-origin",
     "v2.9.0 - Agrupar conexiones por Grupo/Cliente o Categoría, con secciones plegables + campo Grupo (cifrado) por entrada",
     "v2.8.2 - Fix buscador: el icono de lupa ya no se solapa con el texto (conflicto de especificidad CSS)",
     "v2.8.1 - Tags visibles en las tarjetas (icono marcador) + el modal de entrada ya no se cierra al hacer clic fuera (evita perder lo escrito)",

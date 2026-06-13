@@ -21,6 +21,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
+  // No interceptar peticiones cross-origin (ej. Google Fonts): que las maneje el navegador
+  if (url.origin !== self.location.origin) return;
+
   // Never cache: API, version.json, HTML files
   if (
     url.pathname.startsWith('/api') ||
