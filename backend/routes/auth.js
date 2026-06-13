@@ -30,13 +30,14 @@ const sign = (user) =>
   jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 const RP_NAME = 'Vault';
-const getOrigin = (req) => {
-  const origin = process.env.WEBAUTHN_ORIGIN || req.headers.origin || 'https://vault-production-8d8b.up.railway.app';
-  return origin;
-};
-const getRpId = (req) => {
+// Origen FIJO para WebAuthn — no confiar en req.headers.origin (lo controla el cliente
+// y debilitaría la resistencia a phishing). Si usas un dominio propio, define
+// WEBAUTHN_ORIGIN en las variables de entorno de Railway.
+const RP_ORIGIN = process.env.WEBAUTHN_ORIGIN || 'https://vault-production-8d8b.up.railway.app';
+const getOrigin = () => RP_ORIGIN;
+const getRpId = () => {
   try {
-    return new URL(getOrigin(req)).hostname;
+    return new URL(RP_ORIGIN).hostname;
   } catch {
     return 'vault-production-8d8b.up.railway.app';
   }
@@ -47,12 +48,12 @@ router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Faltan campos' });
-    if (password.length < 6) return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
+    if (password.length < 8) return res.status(400).json({ error: 'Contraseña mínimo 8 caracteres' });
     const exists = await User.findOne({ username: username.toLowerCase() });
     if (exists) return res.status(400).json({ error: 'Usuario ya existe' });
     const user = await User.create({ username, password });
     res.json({ token: sign(user), username: user.username });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 router.post('/login', loginLimiter, async (req, res) => {
@@ -62,7 +63,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (!user || !(await user.comparePassword(password)))
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     res.json({ token: sign(user), username: user.username });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 router.get('/me', authMw, async (req, res) => {
@@ -96,7 +97,7 @@ router.post('/passkey/register/start', authMw, async (req, res) => {
     user.webauthnChallenge = options.challenge;
     await user.save();
     res.json(options);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 router.post('/passkey/register/finish', authMw, async (req, res) => {
@@ -124,7 +125,7 @@ router.post('/passkey/register/finish', authMw, async (req, res) => {
     user.webauthnChallenge = null;
     await user.save();
     res.json({ ok: true, passkeyId: user.passkeys[user.passkeys.length - 1]._id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 // ── WebAuthn Authentication ────────────────────────────────
@@ -145,7 +146,7 @@ router.post('/passkey/login/start', passkeyLoginLimiter, async (req, res) => {
     user.webauthnChallenge = options.challenge;
     await user.save();
     res.json(options);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 router.post('/passkey/login/finish', passkeyLoginLimiter, async (req, res) => {
@@ -173,7 +174,7 @@ router.post('/passkey/login/finish', passkeyLoginLimiter, async (req, res) => {
     user.webauthnChallenge = null;
     await user.save();
     res.json({ token: sign(user), username: user.username });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 // ── Delete passkey ──────────────────────────────────────────
@@ -183,7 +184,7 @@ router.delete('/passkey/:id', authMw, async (req, res) => {
     user.passkeys = user.passkeys.filter(p => p._id.toString() !== req.params.id);
     await user.save();
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 module.exports = router;

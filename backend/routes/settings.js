@@ -57,7 +57,7 @@ router.put('/categories', async (req, res) => {
       { new: true, upsert: true }
     );
     res.json(settings);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 // PUT update custom fields + optional fieldOrder
@@ -73,7 +73,7 @@ router.put('/fields', async (req, res) => {
       { new: true, upsert: true }
     );
     res.json(settings);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 // DELETE custom category (only non built-in)
@@ -87,7 +87,7 @@ router.delete('/categories/:id', async (req, res) => {
     settings.categories = settings.categories.filter(c => c.id !== req.params.id);
     await settings.save();
     res.json(settings);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 // DELETE custom field
@@ -98,7 +98,7 @@ router.delete('/fields/:id', async (req, res) => {
     settings.customFields = settings.customFields.filter(f => f._id.toString() !== req.params.id);
     await settings.save();
     res.json(settings);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 module.exports = router;

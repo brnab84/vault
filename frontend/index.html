@@ -1034,6 +1034,7 @@ async function authSubmit() {
   const master   = document.getElementById('authMaster').value;
   if (!username||!password){document.getElementById('authErr').textContent='Completa usuario y contraseña';return;}
   if (currentTab==='register'&&!master){document.getElementById('authErr').textContent='Define tu contraseña maestra';return;}
+  if (currentTab==='register'&&master.length<8){document.getElementById('authErr').textContent='La contraseña maestra debe tener al menos 8 caracteres';return;}
   const btn = document.getElementById('authBtn');
   btn.innerHTML='<span class="loading-spinner"></span>';btn.disabled=true;
   try {
@@ -1515,7 +1516,7 @@ function viewEntry(idx) {
     e.ip?['IP / Host',esc(e.ip)+(e.port?':'+esc(e.port):''),true,false]:null,
     e.user?['Usuario',esc(e.user),true,false]:null,
     e.pass?['Contraseña',`<span class="val-text">${esc(e.pass)}</span>`,true,true]:null,
-    e.url?['URL',`<a href="${esc(e.url)}" target="_blank">${esc(e.url)}</a>`,false,false]:null,
+    e.url?['URL',(function(){const s=safeUrl(e.url);return s?`<a href="${esc(s)}" target="_blank" rel="noopener noreferrer">${esc(e.url)}</a>`:`<span style="word-break:break-all">${esc(e.url)}</span>`;})(),false,false]:null,
     (e.tags&&e.tags.length)?['Tags',e.tags.map(t=>`<span class="meta-pill" style="background:rgba(255,255,255,0.04);color:var(--text3)">${esc(t)}</span>`).join(' '),false,false]:null,
     e.notes?['Notas',`<span style="white-space:pre-wrap">${esc(e.notes)}</span>`,false,false]:null,
     ...(e.customFields||[]).filter(cf=>cf.value).map(cf=>[esc(cf.label),`<span class="val-text">${esc(cf.value)}</span>`,true,cf.isPassword]),
@@ -1861,6 +1862,8 @@ function genAndFill(){const pw=generatePassword();if(pw){document.getElementById
 
 // ─── Utils ───
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Solo permite enlazar URLs http(s); cualquier otro esquema (javascript:, data:, etc.) -> '' (se muestra como texto)
+function safeUrl(u){ try{ const p=new URL(String(u)); return (p.protocol==='http:'||p.protocol==='https:')?p.href:''; }catch{ return ''; } }
 function closeModal(id){
   const el = document.getElementById(id);
   if (!el) return;
