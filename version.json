@@ -1,7 +1,8 @@
 {
-  "version": "2.8.1",
+  "version": "2.8.2",
   "build": "2026-06-11",
   "changelog": [
+    "v2.8.2 - Fix buscador: el icono de lupa ya no se solapa con el texto (conflicto de especificidad CSS)",
     "v2.8.1 - Tags visibles en las tarjetas (icono marcador) + el modal de entrada ya no se cierra al hacer clic fuera (evita perder lo escrito)",
     "v2.8.0 - Cifrado completo: nombre y categoría también se cifran client-side (vault 100% cifrado salvo metadatos de fecha)",
     "v2.7.0 - Cifrado client-side de IP, usuario, URL, puerto, notas y tags (antes solo la contraseña) + migración automática retrocompatible",
