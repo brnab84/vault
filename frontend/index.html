@@ -546,6 +546,7 @@
       <label class="form-label">Contraseña maestra (encriptación local)</label>
       <input type="password" id="authMaster" placeholder="para encriptar tus datos...">
       <div class="master-hint">Esta contraseña encripta tus contraseñas antes de enviarlas. Si la olvidas, tus datos no se pueden recuperar.</div>
+      <button type="button" onclick="suggestAuthPassword()" style="background:transparent;border:none;color:var(--accent);font-size:12px;cursor:pointer;font-family:'JetBrains Mono',monospace;margin-top:8px;padding:0;text-align:left">⚡ Sugerir una contraseña segura</button>
     </div>
     <div id="authErr" class="auth-err"></div>
     <button class="btn btn-primary" onclick="authSubmit()" id="authBtn">Entrar</button>
@@ -1192,6 +1193,14 @@ function exportBackup(){
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast(entries.length + ' entradas exportadas — guárdala segura (sin cifrar)');
   } catch(e){ toast('Error al exportar: ' + e.message, false); }
+}
+function suggestAuthPassword(){
+  const pw = (typeof generatePassword === 'function') ? generatePassword() : '';
+  if (!pw) return;
+  const p = document.getElementById('authPass'), m = document.getElementById('authMaster');
+  if (p) { p.value = pw; p.type = 'text'; }
+  if (m) { m.value = pw; m.type = 'text'; }
+  toast('Contraseña sugerida — guárdala, la necesitarás para entrar');
 }
 function suggestNewPassword(){
   const pw = (typeof generatePassword === 'function') ? generatePassword() : '';

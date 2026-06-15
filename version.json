@@ -1,7 +1,8 @@
 {
-  "version": "2.11.2",
-  "build": "2026-06-14",
+  "version": "2.11.3",
+  "build": "2026-06-15",
   "changelog": [
+    "v2.11.3 - Boton 'Sugerir una contrasena segura' tambien al crear la cuenta (registro)",
     "v2.11.2 - Copia de seguridad: exportar todas las entradas a un archivo JSON (respaldo antes de cambios grandes)",
     "v2.11.1 - Boton 'Sugerir segura' al cambiar contrasena (genera una robusta y la muestra para guardarla)",
     "v2.11.0 - Cambiar contrasena de ingreso desde Parametrizacion + rotacion obligatoria (1/30/60 dias, default 30) + cambio forzado al entrar si vencio o la cuenta es vulnerable + medidor de fuerza",
