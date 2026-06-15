@@ -43,16 +43,35 @@ const getRpId = () => {
   }
 };
 
+// ── Política de contraseñas ──
+// Robusta = mínimo 12 caracteres y al menos 3 de: minúscula, mayúscula, número, símbolo.
+function isRobustPassword(p) {
+  if (typeof p !== 'string' || p.length < 12) return false;
+  let classes = 0;
+  if (/[a-z]/.test(p)) classes++;
+  if (/[A-Z]/.test(p)) classes++;
+  if (/[0-9]/.test(p)) classes++;
+  if (/[^A-Za-z0-9]/.test(p)) classes++;
+  return classes >= 3;
+}
+const ROBUST_MSG = 'La contraseña debe tener mínimo 12 caracteres e incluir al menos 3 de: mayúscula, minúscula, número, símbolo';
+// ¿Venció la contraseña (o la cuenta es previa a la política)? -> debe cambiarla.
+function passwordExpired(user) {
+  if (!user.passwordChangedAt) return true;
+  const ageDays = (Date.now() - new Date(user.passwordChangedAt).getTime()) / 86400000;
+  return ageDays >= (user.passwordMaxAgeDays || 30);
+}
+
 // ── Standard Auth ──────────────────────────────────────────
 router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Faltan campos' });
-    if (password.length < 8) return res.status(400).json({ error: 'Contraseña mínimo 8 caracteres' });
+    if (!isRobustPassword(password)) return res.status(400).json({ error: ROBUST_MSG });
     const exists = await User.findOne({ username: username.toLowerCase() });
     if (exists) return res.status(400).json({ error: 'Usuario ya existe' });
-    const user = await User.create({ username, password });
-    res.json({ token: sign(user), username: user.username });
+    const user = await User.create({ username, password, passwordChangedAt: new Date() });
+    res.json({ token: sign(user), username: user.username, mustChangePassword: false, passwordMaxAgeDays: user.passwordMaxAgeDays });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
@@ -62,13 +81,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = await User.findOne({ username: username?.toLowerCase() });
     if (!user || !(await user.comparePassword(password)))
       return res.status(401).json({ error: 'Credenciales incorrectas' });
-    res.json({ token: sign(user), username: user.username });
+    res.json({ token: sign(user), username: user.username, mustChangePassword: passwordExpired(user), passwordMaxAgeDays: user.passwordMaxAgeDays || 30, passwordChangedAt: user.passwordChangedAt || null });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
 router.get('/me', authMw, async (req, res) => {
-  const user = await User.findById(req.user.id).select('username passkeys');
-  res.json({ username: user.username, hasPasskeys: user.passkeys.length > 0, passkeys: user.passkeys.map(p => ({ id: p._id, name: p.name, createdAt: p.createdAt })) });
+  const user = await User.findById(req.user.id).select('username passkeys passwordChangedAt passwordMaxAgeDays');
+  res.json({ username: user.username, hasPasskeys: user.passkeys.length > 0, passkeys: user.passkeys.map(p => ({ id: p._id, name: p.name, createdAt: p.createdAt })), mustChangePassword: passwordExpired(user), passwordMaxAgeDays: user.passwordMaxAgeDays || 30, passwordChangedAt: user.passwordChangedAt || null });
 });
 
 // ── WebAuthn Registration ──────────────────────────────────
@@ -184,6 +203,35 @@ router.delete('/passkey/:id', authMw, async (req, res) => {
     user.passkeys = user.passkeys.filter(p => p._id.toString() !== req.params.id);
     await user.save();
     res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// ── Cambiar contraseña ──
+router.post('/change-password', authMw, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!currentPassword || !(await user.comparePassword(currentPassword)))
+      return res.status(401).json({ error: 'La contraseña actual no es correcta' });
+    if (!isRobustPassword(newPassword)) return res.status(400).json({ error: ROBUST_MSG });
+    if (await user.comparePassword(newPassword))
+      return res.status(400).json({ error: 'La nueva contraseña debe ser distinta de la actual' });
+    user.password = newPassword;              // el hook pre-save la hashea
+    user.passwordChangedAt = new Date();
+    await user.save();
+    res.json({ ok: true, passwordChangedAt: user.passwordChangedAt, passwordMaxAgeDays: user.passwordMaxAgeDays || 30 });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// ── Política de rotación (cada cuántos días: 1–60) ──
+router.post('/password-policy', authMw, async (req, res) => {
+  try {
+    const maxAgeDays = parseInt(req.body.maxAgeDays, 10);
+    if (!Number.isInteger(maxAgeDays) || maxAgeDays < 1 || maxAgeDays > 60)
+      return res.status(400).json({ error: 'El intervalo debe estar entre 1 y 60 días' });
+    const user = await User.findByIdAndUpdate(req.user.id, { passwordMaxAgeDays: maxAgeDays }, { new: true });
+    res.json({ ok: true, passwordMaxAgeDays: user.passwordMaxAgeDays, mustChangePassword: passwordExpired(user) });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 
