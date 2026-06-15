@@ -32,7 +32,8 @@ const userSettingsSchema = new mongoose.Schema({
   fieldOrder: { type: [{
     key:     { type: String, required: true },
     visible: { type: Boolean, default: true }
-  }], default: [] }
+  }], default: [] },
+  encSalt: { type: String }   // salt público y estable para derivar la clave 1 vez por sesión (no es secreto)
 }, { timestamps: true });
 
 module.exports = mongoose.model('UserSettings', userSettingsSchema);

@@ -764,6 +764,7 @@
 const API = window.location.origin + '/api';
 let token = localStorage.getItem('vault_token') || null;
 let masterKey = null;
+let userSalt = null;          // salt público del usuario (del servidor) para derivar la clave de sesión 1 vez
 let entries = [];
 let settings = { categories: [], customFields: [] };
 let editIdx = -1;
@@ -772,26 +773,62 @@ let currentTab = 'login';
 let currentUsername = '';
 
 // ─── Crypto ───
-async function deriveKey(password, salt) {
+// Formato v3 (actual): la clave se deriva UNA vez por sesión desde (master + salt del
+// usuario) a 600k iteraciones, y cada valor lleva solo su IV -> "3:"+base64(iv+ct).
+// Formato legacy: cada valor tenía su propio salt embebido a 200k -> base64(salt+iv+ct).
+// decryptVal lee AMBOS, así los datos viejos nunca se rompen.
+const PBKDF2_LEGACY_ITERS = 200000;
+const PBKDF2_ITERS = 600000;
+let _sessionKey = null, _sessionKeyTag = null;
+
+async function deriveKey(password, salt, iterations) {
   const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' }, km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations, hash:'SHA-256' }, km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
 }
+// Clave de sesión: 1 sola derivación a 600k desde (master + userSalt), cacheada.
+async function getSessionKey(master) {
+  if (!master || !userSalt) throw new Error('sin clave de sesión');
+  const tag = master + '|' + userSalt;
+  if (_sessionKey && _sessionKeyTag === tag) return _sessionKey;
+  const saltBytes = Uint8Array.from(atob(userSalt), c => c.charCodeAt(0));
+  _sessionKey = await deriveKey(master, saltBytes, PBKDF2_ITERS);
+  _sessionKeyTag = tag;
+  return _sessionKey;
+}
+async function getSessionKeyOrNull(master) { try { return await getSessionKey(master); } catch { return null; } }
+
 async function encryptVal(plain, master) {
   if (!plain) return '';
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await getSessionKeyOrNull(master);
+  if (key) {
+    // v3: clave de sesión compartida + IV por valor
+    const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plain));
+    const buf = new Uint8Array(12 + ct.byteLength);
+    buf.set(iv, 0); buf.set(new Uint8Array(ct), 12);
+    return '3:' + btoa(String.fromCharCode(...buf));
+  }
+  // Fallback legacy (sin salt de sesión disponible): salt por valor a 200k
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const key  = await deriveKey(master, salt);
-  const ct   = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plain));
-  const buf  = new Uint8Array(16+12+ct.byteLength);
-  buf.set(salt,0); buf.set(iv,16); buf.set(new Uint8Array(ct),28);
+  const k = await deriveKey(master, salt, PBKDF2_LEGACY_ITERS);
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, k, new TextEncoder().encode(plain));
+  const buf = new Uint8Array(16 + 12 + ct.byteLength);
+  buf.set(salt, 0); buf.set(iv, 16); buf.set(new Uint8Array(ct), 28);
   return btoa(String.fromCharCode(...buf));
 }
-async function decryptVal(b64, master) {
-  if (!b64) return '';
+async function decryptVal(stored, master) {
+  if (!stored) return '';
   try {
-    const buf = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
-    const key = await deriveKey(master, buf.slice(0,16));
-    const pt  = await crypto.subtle.decrypt({ name:'AES-GCM', iv:buf.slice(16,28) }, key, buf.slice(28));
+    if (typeof stored === 'string' && stored.startsWith('3:')) {
+      const key = await getSessionKey(master);
+      const buf = Uint8Array.from(atob(stored.slice(2)), c => c.charCodeAt(0));
+      const pt  = await crypto.subtle.decrypt({ name:'AES-GCM', iv: buf.slice(0,12) }, key, buf.slice(12));
+      return new TextDecoder().decode(pt);
+    }
+    // legacy: salt por valor embebido a 200k
+    const buf = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+    const k   = await deriveKey(master, buf.slice(0,16), PBKDF2_LEGACY_ITERS);
+    const pt  = await crypto.subtle.decrypt({ name:'AES-GCM', iv: buf.slice(16,28) }, k, buf.slice(28));
     return new TextDecoder().decode(pt);
   } catch { return '[error al desencriptar]'; }
 }
@@ -819,10 +856,19 @@ async function decryptTags(tagsArr, master) {
   if (!Array.isArray(tagsArr)) return [];
   return Promise.all(tagsArr.map(t => decryptField(t, master)));
 }
-function isLegacyEntry(e) {
-  const f = v => typeof v === 'string' && v !== '' && !v.startsWith(ENC_TAG);
-  if (f(e.name) || f(e.cat) || f(e.ip) || f(e.port) || f(e.user) || f(e.url) || f(e.notes)) return true;
-  if (Array.isArray(e.tags) && e.tags.some(f)) return true;
+// ¿Un valor almacenado está en formato viejo (legacy con salt por valor, o texto plano)
+// en vez de v3? Quita el ENC_TAG si lo tiene y mira si empieza por "3:".
+function isOldCrypto(v) {
+  if (!v || typeof v !== 'string') return false;
+  const s = v.startsWith(ENC_TAG) ? v.slice(ENC_TAG.length) : v;
+  if (s === '') return false;
+  return !s.startsWith('3:');
+}
+// ¿La entrada tiene algún valor que aún no está en v3? -> hay que re-cifrarla.
+function needsRekey(e) {
+  if ([e.name, e.cat, e.group, e.ip, e.port, e.user, e.url, e.notes, e.passEncrypted].some(isOldCrypto)) return true;
+  if (Array.isArray(e.tags) && e.tags.some(isOldCrypto)) return true;
+  if (Array.isArray(e.customFields) && e.customFields.some(cf => isOldCrypto(cf.valueEncrypted))) return true;
   return false;
 }
 
@@ -1064,7 +1110,7 @@ async function authSubmit() {
 }
 
 function logout() {
-  token=null;masterKey=null;entries=[];settings={categories:[],customFields:[]};
+  token=null;masterKey=null;userSalt=null;_sessionKey=null;_sessionKeyTag=null;entries=[];settings={categories:[],customFields:[]};
   localStorage.removeItem('vault_token');
   document.getElementById('appView').style.display='none';
   document.getElementById('authScreen').style.display='flex';
@@ -1100,6 +1146,7 @@ async function syncAll() {
       ];
     }
     settings = rawSettings;
+    if (settings.encSalt && settings.encSalt !== userSalt) { userSalt = settings.encSalt; _sessionKey = null; _sessionKeyTag = null; }
     _syncModal('syncing', 'Sincronizando...', 'Cargando entradas...', 45);
 
     // Entries
@@ -1138,7 +1185,7 @@ async function syncAll() {
             ...cf, value: await decryptVal(cf.valueEncrypted, masterKey)
           })))
         };
-        if (isLegacyEntry(e)) toMigrate.push(dec);
+        if (needsRekey(e)) toMigrate.push(dec);
         return dec;
       } catch(_) { errs++; return { ...e, pass:'', customFields:(e.customFields||[]).map(cf=>({...cf,value:''})) }; }
     }));
@@ -1147,7 +1194,7 @@ async function syncAll() {
 
     // Migración retrocompatible: cifra en segundo plano las entradas que aún
     // tengan campos en texto plano. No bloquea la UI; la lectura ya funciona.
-    if (masterKey && toMigrate.length) migrateLegacyEntries(toMigrate);
+    if (masterKey && userSalt && toMigrate.length) migrateLegacyEntries(toMigrate);
 
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);
     const n = entries.length;
@@ -1171,42 +1218,53 @@ async function syncAll() {
 // no se pueda volver a leer. Cualquier error se omite sin afectar la lectura
 // (que ya es retrocompatible).
 async function migrateLegacyEntries(list) {
-  if (!masterKey || !list || !list.length) return;
+  if (!masterKey || !userSalt || !list || !list.length) return;
+  const ERR = '[error al desencriptar]';
   let migrated = 0;
   for (const e of list) {
     try {
+      // Guard: si algún valor no se descifró bien, NO re-cifrar (no sobreescribir con basura)
+      const dvals = [e.name, e.cat, e.group, e.ip, e.port, e.user, e.url, e.notes, e.pass,
+        ...((e.customFields||[]).map(c => c.value)), ...((e.tags)||[])];
+      if (dvals.some(v => v === ERR)) { console.warn('[rekey] descifrado falló, se omite', e._id); continue; }
+
       const payload = {
-        name:  await encryptField(e.name || '', masterKey),
-        cat:   await encryptField(e.cat  || '', masterKey),
+        name:  await encryptField(e.name  || '', masterKey),
+        cat:   await encryptField(e.cat   || '', masterKey),
+        group: await encryptField(e.group || '', masterKey),
         ip:    await encryptField(e.ip    || '', masterKey),
         port:  await encryptField(e.port  || '', masterKey),
         user:  await encryptField(e.user  || '', masterKey),
         url:   await encryptField(e.url   || '', masterKey),
         notes: await encryptField(e.notes || '', masterKey),
         tags:  await encryptTags(e.tags   || [], masterKey),
-        passEncrypted: e.passEncrypted, // ya estaba cifrado, se conserva intacto
-        customFields: (e.customFields||[]).map(cf => ({
-          key: cf.key, label: cf.label, valueEncrypted: cf.valueEncrypted, isPassword: cf.isPassword
-        }))
+        passEncrypted: await encryptVal(e.pass || '', masterKey),
+        customFields: await Promise.all((e.customFields||[]).map(async cf => ({
+          key: cf.key, label: cf.label,
+          valueEncrypted: await encryptVal(cf.value || '', masterKey),
+          isPassword: cf.isPassword
+        })))
       };
-      // Verificación round-trip antes de escribir
+      // Verificación round-trip antes de escribir: nunca guardar algo que no se pueda releer
       const verified =
         (await decryptField(payload.name,  masterKey)) === (e.name  || '') &&
         (await decryptField(payload.cat,   masterKey)) === (e.cat   || '') &&
+        (await decryptField(payload.group, masterKey)) === (e.group || '') &&
         (await decryptField(payload.ip,    masterKey)) === (e.ip    || '') &&
         (await decryptField(payload.port,  masterKey)) === (e.port  || '') &&
         (await decryptField(payload.user,  masterKey)) === (e.user  || '') &&
         (await decryptField(payload.url,   masterKey)) === (e.url   || '') &&
-        (await decryptField(payload.notes, masterKey)) === (e.notes || '');
-      if (!verified) { console.warn('[migración] verificación falló, se omite', e._id); continue; }
+        (await decryptField(payload.notes, masterKey)) === (e.notes || '') &&
+        (await decryptVal(payload.passEncrypted, masterKey)) === (e.pass || '');
+      if (!verified) { console.warn('[rekey] verificación falló, se omite', e._id); continue; }
       await api('PUT', '/entries/' + e._id, payload);
       migrated++;
     } catch(err) {
-      console.warn('[migración] error en entrada', e._id, err && err.message);
+      console.warn('[rekey] error en entrada', e._id, err && err.message);
     }
   }
   if (migrated) {
-    console.log('[migración] ' + migrated + ' entrada(s) cifradas');
+    console.log('[rekey] ' + migrated + ' entrada(s) re-cifradas a v3 (600k)');
     try { toast(migrated + ' entrada' + (migrated!==1?'s':'') + ' protegida' + (migrated!==1?'s':'') + ' con cifrado'); } catch(_){}
   }
 }

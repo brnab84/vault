@@ -32,6 +32,11 @@ router.get('/', async (req, res) => {
       settings.categories = fixed;
       await settings.save();
     }
+    // Salt de cifrado por usuario — público y estable; se genera una sola vez y nunca cambia
+    if (!settings.encSalt) {
+      settings.encSalt = require('crypto').randomBytes(16).toString('base64');
+      await settings.save();
+    }
     res.json(settings);
   } catch (e) {
     // Never crash — return safe defaults
