@@ -758,6 +758,30 @@
   </div>
 </div>
 
+<!-- CHANGE PASSWORD MODAL -->
+<div class="overlay" id="pwModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <span id="pwModalTitle">Cambiar contraseña</span>
+    </div>
+    <p id="pwModalMsg" style="color:var(--amber);font-size:13px;margin-bottom:1rem;line-height:1.5;display:none"></p>
+    <div class="form-grid">
+      <div class="form-group" id="pwCurrentWrap"><label class="form-label">Contraseña actual</label><input type="password" id="pwCurrent" placeholder="tu contraseña actual"></div>
+      <div class="form-group"><label class="form-label">Nueva contraseña</label><input type="password" id="pwNew" oninput="updatePwStrength()" placeholder="mínimo 12 caracteres"></div>
+      <div class="strength-bar"><div class="strength-fill" id="pwStrengthFill" style="width:0%"></div></div>
+      <div id="pwStrengthLabel" style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace"></div>
+      <div class="form-group"><label class="form-label">Repetir nueva contraseña</label><input type="password" id="pwConfirm" placeholder="repite la nueva"></div>
+      <div id="pwErr" class="auth-err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="pwLogoutBtn" onclick="logout();closeModal('pwModal')" style="display:none">Cerrar sesión</button>
+      <button class="btn btn-secondary" id="pwCancelBtn" onclick="closeModal('pwModal')">Cancelar</button>
+      <button class="btn btn-primary" id="pwSaveBtn" onclick="submitChangePassword()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1099,12 +1123,9 @@ async function authSubmit() {
         if (m) { masterKey=m; localStorage.setItem('vault_master_'+username,m); }
       }
     }
-    document.getElementById('usernameChip').textContent = data.username;
-    loadVersion();
-    const mc=document.getElementById('usernameChipMobile');if(mc)mc.textContent=data.username;
-    document.getElementById('authScreen').style.display='none';
-    document.getElementById('appView').style.display='block';
-    await syncAll();
+    pwPolicy = { maxAgeDays: data.passwordMaxAgeDays || 30, changedAt: data.passwordChangedAt || null };
+    if (currentTab === 'login' && data.mustChangePassword) { forcePasswordChange(password); return; }
+    await _finishLogin(data.username);
   } catch(e){document.getElementById('authErr').textContent=e.message;}
   finally{btn.innerHTML=currentTab==='login'?'Entrar':'Crear cuenta';btn.disabled=false;}
 }
@@ -1116,6 +1137,119 @@ function logout() {
   document.getElementById('authScreen').style.display='flex';
   document.getElementById('authUser').value='';document.getElementById('authPass').value='';
   document.getElementById('authErr').textContent='';
+}
+
+// ─── Cambio de contraseña de ingreso + rotación ───
+let pwPolicy = { maxAgeDays: 30, changedAt: null };
+let _forcedCurrentPw = null;   // contraseña actual capturada en login (transitoria, solo en memoria)
+let _pwForced = false;
+
+function passwordStrength(p){
+  let classes = 0;
+  if (/[a-z]/.test(p)) classes++;
+  if (/[A-Z]/.test(p)) classes++;
+  if (/[0-9]/.test(p)) classes++;
+  if (/[^A-Za-z0-9]/.test(p)) classes++;
+  const ok = p.length >= 12 && classes >= 3;
+  let score = Math.min(100, Math.round((p.length/20)*55 + classes*15));
+  if (ok) score = Math.max(score, 80);
+  return { ok, score, classes };
+}
+function updatePwStrength(){
+  const p = document.getElementById('pwNew')?.value || '';
+  const { ok, score } = passwordStrength(p);
+  const fill = document.getElementById('pwStrengthFill');
+  const lbl  = document.getElementById('pwStrengthLabel');
+  if (fill) fill.style.cssText = `width:${p?score:0}%;background:${score<50?'var(--red)':score<80?'var(--amber)':'var(--green)'}`;
+  if (lbl)  { lbl.textContent = !p ? '' : ok ? '✓ Robusta' : 'Mín. 12 y al menos 3 de: mayúscula, minúscula, número, símbolo'; lbl.style.color = ok ? 'var(--green)' : 'var(--text3)'; }
+}
+async function _finishLogin(username){
+  document.getElementById('usernameChip').textContent = username;
+  const mc = document.getElementById('usernameChipMobile'); if (mc) mc.textContent = username;
+  loadVersion();
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appView').style.display = 'block';
+  await syncAll();
+  maybeShowPwExpiryBanner();
+}
+function openChangePassword(){
+  _pwForced = false; _forcedCurrentPw = null;
+  document.getElementById('pwModalTitle').textContent = 'Cambiar contraseña';
+  document.getElementById('pwModalMsg').style.display = 'none';
+  document.getElementById('pwCurrentWrap').style.display = '';
+  document.getElementById('pwCancelBtn').style.display = '';
+  document.getElementById('pwLogoutBtn').style.display = 'none';
+  ['pwCurrent','pwNew','pwConfirm'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pwErr').textContent = '';
+  updatePwStrength();
+  document.getElementById('pwModal').classList.add('open');
+}
+function forcePasswordChange(currentPw){
+  _pwForced = true; _forcedCurrentPw = currentPw || null;
+  document.getElementById('pwModalTitle').textContent = 'Actualiza tu contraseña';
+  const msg = document.getElementById('pwModalMsg');
+  msg.textContent = 'Por seguridad debes establecer una contraseña nueva y robusta para continuar.';
+  msg.style.display = '';
+  document.getElementById('pwCurrentWrap').style.display = _forcedCurrentPw ? 'none' : '';
+  document.getElementById('pwCancelBtn').style.display = 'none';
+  document.getElementById('pwLogoutBtn').style.display = '';
+  ['pwCurrent','pwNew','pwConfirm'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pwErr').textContent = '';
+  updatePwStrength();
+  document.getElementById('pwModal').classList.add('open');
+}
+async function submitChangePassword(){
+  const current = _forcedCurrentPw || (document.getElementById('pwCurrent')?.value || '');
+  const nw   = document.getElementById('pwNew')?.value || '';
+  const conf = document.getElementById('pwConfirm')?.value || '';
+  const err  = document.getElementById('pwErr');
+  if (!current) { err.textContent = 'Ingresa tu contraseña actual'; return; }
+  if (!passwordStrength(nw).ok) { err.textContent = 'La nueva contraseña no es lo bastante robusta'; return; }
+  if (nw !== conf) { err.textContent = 'Las contraseñas no coinciden'; return; }
+  const btn = document.getElementById('pwSaveBtn'); const old = btn.textContent; btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const r = await api('POST','/auth/change-password',{ currentPassword: current, newPassword: nw });
+    pwPolicy.changedAt = r.passwordChangedAt; pwPolicy.maxAgeDays = r.passwordMaxAgeDays || pwPolicy.maxAgeDays;
+    const wasForced = _pwForced;
+    _pwForced = false; _forcedCurrentPw = null;
+    closeModal('pwModal'); removePwBanner();
+    if (wasForced) { await _finishLogin(currentUsername); }
+    else { toast('Contraseña actualizada'); renderSecuritySection(); }
+  } catch(e){ err.textContent = e.message; }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+async function setPasswordPolicy(days){
+  try { const r = await api('POST','/auth/password-policy',{ maxAgeDays: parseInt(days,10) }); pwPolicy.maxAgeDays = r.passwordMaxAgeDays; renderSecuritySection(); toast('Rotación: cada ' + r.passwordMaxAgeDays + ' días'); }
+  catch(e){ toast('Error: ' + e.message, false); }
+}
+function pwDaysLeft(){
+  if (!pwPolicy.changedAt) return -1;
+  const age = (Date.now() - new Date(pwPolicy.changedAt).getTime()) / 86400000;
+  return Math.ceil((pwPolicy.maxAgeDays || 30) - age);
+}
+function removePwBanner(){ const b = document.getElementById('pwBanner'); if (b) b.remove(); }
+function maybeShowPwExpiryBanner(){
+  const left = pwDaysLeft();
+  removePwBanner();
+  if (left > 3) return;
+  const b = document.createElement('div');
+  b.id = 'pwBanner';
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9998;background:' + (left<0?'#f87171':'#fbbf24') + ';color:#1a1e25;text-align:center;padding:10px 16px;font-family:Syne,sans-serif;font-size:13px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))';
+  b.innerHTML = '<span>' + (left<0 ? 'Tu contraseña de ingreso venció.' : 'Tu contraseña de ingreso vence en ' + left + ' día(s).') + '</span>' +
+    '<button onclick="openChangePassword()" style="background:#1a1e25;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer;font-family:Syne,sans-serif">Cambiar ahora</button>' +
+    '<button onclick="removePwBanner()" style="background:transparent;border:none;color:rgba(0,0,0,0.55);cursor:pointer;font-size:16px">&times;</button>';
+  document.body.appendChild(b);
+}
+function renderSecuritySection(){
+  const sel = document.getElementById('pwRotationSel');
+  if (sel) sel.value = String(pwPolicy.maxAgeDays || 30);
+  const st = document.getElementById('pwStatus');
+  if (st) {
+    const left = pwDaysLeft();
+    if (!pwPolicy.changedAt) { st.textContent = '⚠ Nunca registrada — deberías cambiarla ya'; st.style.color = 'var(--red)'; }
+    else if (left < 0) { st.textContent = '⚠ Venció — cámbiala ahora'; st.style.color = 'var(--red)'; }
+    else { st.textContent = 'Vence en ' + left + ' día(s)'; st.style.color = 'var(--text2)'; }
+  }
 }
 
 // ─── Sync ───
@@ -1669,6 +1803,25 @@ function openSettings(){
       </div>
     </div>
 
+    <!-- SEGURIDAD DE LA CUENTA -->
+    <div class="settings-section">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Seguridad de la cuenta
+        <span style="font-size:11px;color:var(--text3);font-weight:400">— contraseña de ingreso</span>
+      </h3>
+      <div id="pwStatus" style="font-size:12px;font-family:'JetBrains Mono',monospace;margin-bottom:12px"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <label class="form-label" style="margin:0">Obligar cambio cada</label>
+        <select id="pwRotationSel" onchange="setPasswordPolicy(this.value)" style="width:auto">
+          <option value="1">1 día</option>
+          <option value="30">30 días</option>
+          <option value="60">60 días</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="openChangePassword()">Cambiar contraseña</button>
+    </div>
+
     <!-- FIELD ORDER -->
     <div class="settings-section">
       <h3>
@@ -1684,6 +1837,7 @@ function openSettings(){
   renderSettingsFields();
   renderFieldOrderList();
   renderPasskeyList();
+  renderSecuritySection();
 }
 
 // ─── Field Order Drag & Drop (touch + mouse) ───
@@ -1933,7 +2087,7 @@ function toggleVis(id){const i=document.getElementById(id);i.type=i.type==='pass
 let toastT;
 function toast(msg,ok=true){const t=document.getElementById('toast');t.innerHTML=(ok?'✓':'✗')+' '+msg;t.style.color=ok?'var(--green)':'var(--red)';t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2500);}
 // El modal de entrada (addModal) NO se cierra al hacer clic fuera, para no perder lo que se escribe
-document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov && ov.id!=='addModal')ov.classList.remove('open');}));
+document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov && ov.id!=='addModal' && ov.id!=='pwModal')ov.classList.remove('open');}));
 
 
 
@@ -2268,11 +2422,9 @@ if (window.location.hash === '#register') {
       const saved=localStorage.getItem('vault_master_'+data.username);
       if(saved){
         masterKey=saved;
-        document.getElementById('usernameChip').textContent=data.username;
-        loadVersion();
-        document.getElementById('authScreen').style.display='none';
-        document.getElementById('appView').style.display='block';
-        await syncAll();
+        pwPolicy = { maxAgeDays: data.passwordMaxAgeDays || 30, changedAt: data.passwordChangedAt || null };
+        if (data.mustChangePassword) { forcePasswordChange(null); }
+        else { await _finishLogin(data.username); }
       }else{localStorage.removeItem('vault_token');token=null;}
     }catch{localStorage.removeItem('vault_token');token=null;}
   }

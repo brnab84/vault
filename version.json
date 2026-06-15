@@ -1,7 +1,8 @@
 {
-  "version": "2.10.1",
+  "version": "2.11.0",
   "build": "2026-06-14",
   "changelog": [
+    "v2.11.0 - Cambiar contrasena de ingreso desde Parametrizacion + rotacion obligatoria (1/30/60 dias, default 30) + cambio forzado al entrar si vencio o la cuenta es vulnerable + medidor de fuerza",
     "v2.10.1 - Backend: el registro exige contrasenas robustas (min 12, 3 tipos) + base para cambio y rotacion de contrasena de ingreso (UI en camino)",
     "v2.10.0 - Cifrado v3: clave derivada 1 vez por sesion a 600k iteraciones (antes 200k por cada campo) -> sincronizacion mucho mas rapida Y mas segura; migracion automatica verificada y retrocompatible",
     "v2.9.2 - Seguridad: bloqueo de URLs javascript:/data: en el detalle, origen WebAuthn fijo (anti-phishing), errores 500 genericos (anti fuga de internos), contrasena minima 8",
