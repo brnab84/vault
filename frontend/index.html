@@ -1172,6 +1172,27 @@ async function _finishLogin(username){
   await syncAll();
   maybeShowPwExpiryBanner();
 }
+function exportBackup(){
+  try {
+    const data = {
+      app: 'Vault', exportedAt: new Date().toISOString(), username: currentUsername,
+      aviso: 'Copia SIN cifrar. Guardala en un lugar seguro y borrala cuando no la necesites.',
+      entries: entries.map(e => ({
+        name: e.name, group: e.group||'', cat: e.cat, ip: e.ip||'', port: e.port||'',
+        user: e.user||'', pass: e.pass||'', url: e.url||'', tags: e.tags||[], notes: e.notes||'',
+        customFields: (e.customFields||[]).map(c => ({ label: c.label, value: c.value||'' }))
+      })),
+      categories: settings.categories||[], customFields: settings.customFields||[]
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'vault-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(entries.length + ' entradas exportadas — guárdala segura (sin cifrar)');
+  } catch(e){ toast('Error al exportar: ' + e.message, false); }
+}
 function suggestNewPassword(){
   const pw = (typeof generatePassword === 'function') ? generatePassword() : '';
   if (!pw) return;
@@ -1829,6 +1850,16 @@ function openSettings(){
         </select>
       </div>
       <button class="btn btn-primary" onclick="openChangePassword()">Cambiar contraseña</button>
+    </div>
+
+    <!-- COPIA DE SEGURIDAD -->
+    <div class="settings-section">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Copia de seguridad
+      </h3>
+      <p style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:12px">Descarga todas tus entradas descifradas en un archivo JSON. <span style="color:var(--amber)">⚠️ No está cifrado</span>: guárdalo en un lugar seguro y bórralo cuando no lo necesites. Recomendado como respaldo antes de cambios grandes.</p>
+      <button class="btn btn-secondary" onclick="exportBackup()">Exportar copia (.json)</button>
     </div>
 
     <!-- FIELD ORDER -->
