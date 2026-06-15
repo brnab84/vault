@@ -2,6 +2,8 @@ const router  = require('express').Router();
 const jwt     = require('jsonwebtoken');
 const User    = require('../models/User');
 const authMw  = require('../middleware/auth');
+const bcrypt  = require('bcryptjs');
+const crypto  = require('crypto');
 
 const {
   generateRegistrationOptions,
@@ -25,9 +27,17 @@ const passkeyLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 20,
   keyFn: (req) => 'pklogin:' + ipOf(req) + ':' + (req.body?.username || '').toLowerCase()
 });
+const verifierLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  keyFn: (req) => 'vlogin:' + ipOf(req) + ':' + (req.body?.username || '').toLowerCase()
+});
 
 const sign = (user) =>
   jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+// Salt determinista para usuarios sin verificador aún (evita revelar si el usuario existe).
+const pseudoSalt = (username) =>
+  crypto.createHmac('sha256', process.env.JWT_SECRET || 'fallback').update('authsalt:' + username).digest('base64').slice(0, 24);
 
 const RP_NAME = 'Vault';
 // Origen FIJO para WebAuthn — no confiar en req.headers.origin (lo controla el cliente
@@ -232,6 +242,45 @@ router.post('/password-policy', authMw, async (req, res) => {
       return res.status(400).json({ error: 'El intervalo debe estar entre 1 y 60 días' });
     const user = await User.findByIdAndUpdate(req.user.id, { passwordMaxAgeDays: maxAgeDays }, { new: true });
     res.json({ ok: true, passwordMaxAgeDays: user.passwordMaxAgeDays, mustChangePassword: passwordExpired(user) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// ── Login con una sola contraseña (verificador derivado de la maestra) ──
+// El cliente deriva authVerifier = PBKDF2(maestra, authSalt) con un salt DISTINTO al
+// de cifrado, así el server verifica sin poder descifrar nada. Endpoints NUEVOS: el
+// login clásico (/login con contraseña) sigue intacto hasta que el frontend migre.
+
+// Devuelve el salt para derivar el verificador (sin revelar si el usuario existe).
+router.post('/salt', async (req, res) => {
+  try {
+    const username = (req.body.username || '').toLowerCase().trim();
+    const user = username ? await User.findOne({ username }) : null;
+    res.json({ authSalt: (user && user.authSalt) || pseudoSalt(username), hasVerifier: !!(user && user.authVerifierHash) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// Establece el verificador (se llama tras un login normal, con sesión válida).
+router.post('/setup-verifier', authMw, async (req, res) => {
+  try {
+    const { authSalt, authVerifier } = req.body;
+    if (!authSalt || !authVerifier) return res.status(400).json({ error: 'Faltan datos' });
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    user.authSalt = String(authSalt);
+    user.authVerifierHash = await bcrypt.hash(String(authVerifier), 12);
+    await user.save();
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// Login con el verificador (en vez de la contraseña clásica).
+router.post('/login-verifier', verifierLoginLimiter, async (req, res) => {
+  try {
+    const { username, authVerifier } = req.body;
+    const user = await User.findOne({ username: username?.toLowerCase() });
+    if (!user || !user.authVerifierHash || !authVerifier || !(await bcrypt.compare(String(authVerifier), user.authVerifierHash)))
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
+    res.json({ token: sign(user), username: user.username, mustChangePassword: passwordExpired(user), passwordMaxAgeDays: user.passwordMaxAgeDays || 30, passwordChangedAt: user.passwordChangedAt || null });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Error del servidor' }); }
 });
 

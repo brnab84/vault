@@ -17,6 +17,8 @@ const userSchema = new mongoose.Schema({
   password:  { type: String, required: true },
   passwordChangedAt:  { type: Date },                                 // ausente = cuenta previa a la política (debe cambiar)
   passwordMaxAgeDays: { type: Number, default: 30, min: 1, max: 60 }, // rotación: forzar cambio cada N días
+  authSalt:          { type: String },   // salt público para derivar el verificador (login con una sola contraseña)
+  authVerifierHash:  { type: String },   // bcrypt del verificador derivado de la maestra; el server nunca ve la maestra
   passkeys:  { type: [passkeySchema], default: [] },
   webauthnChallenge: { type: String, default: null }, // temp challenge storage
   createdAt: { type: Date, default: Date.now }

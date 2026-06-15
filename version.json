@@ -1,7 +1,8 @@
 {
-  "version": "2.11.3",
+  "version": "2.11.4",
   "build": "2026-06-15",
   "changelog": [
+    "v2.11.4 - Backend (inerte) para login con una sola contrasena: endpoints /salt, /setup-verifier, /login-verifier (el login actual no cambia todavia)",
     "v2.11.3 - Boton 'Sugerir una contrasena segura' tambien al crear la cuenta (registro)",
     "v2.11.2 - Copia de seguridad: exportar todas las entradas a un archivo JSON (respaldo antes de cambios grandes)",
     "v2.11.1 - Boton 'Sugerir segura' al cambiar contrasena (genera una robusta y la muestra para guardarla)",
