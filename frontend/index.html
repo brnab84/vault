@@ -541,7 +541,9 @@
       <div class="auth-tab" onclick="switchTab('register')">Registrarse</div>
     </div>
     <div class="form-group"><label class="form-label">Usuario</label><input type="text" id="authUser" placeholder="tu usuario" onkeydown="if(event.key==='Enter')authSubmit()"></div>
-    <div class="form-group"><label class="form-label">Contraseña del sistema</label><input type="password" id="authPass" placeholder="contraseña..." onkeydown="if(event.key==='Enter')authSubmit()"></div>
+    <div class="form-group"><label class="form-label">Contraseña</label><input type="password" id="authPass" placeholder="tu contraseña..." onkeydown="if(event.key==='Enter')authSubmit()">
+      <button type="button" id="authSuggestBtn" onclick="suggestAuthPassword()" style="display:none;background:transparent;border:none;color:var(--accent);font-size:12px;cursor:pointer;font-family:'JetBrains Mono',monospace;margin-top:6px;padding:0;text-align:left">⚡ Sugerir una contraseña segura</button>
+    </div>
     <div id="masterWrap" class="form-group" style="display:none">
       <label class="form-label">Contraseña maestra (encriptación local)</label>
       <input type="password" id="authMaster" placeholder="para encriptar tus datos...">
@@ -1094,38 +1096,76 @@ function showChangelog() {
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')));
-  document.getElementById('masterWrap').style.display = tab==='register'?'flex':'none';
+  const mw = document.getElementById('masterWrap'); if (mw) mw.style.display = 'none';   // unificado: una sola contraseña
+  const sug = document.getElementById('authSuggestBtn'); if (sug) sug.style.display = tab==='register' ? 'block' : 'none';
   document.getElementById('authBtn').textContent = tab==='login'?'Entrar':'Crear cuenta';
   document.getElementById('authErr').textContent = '';
 }
 
+// ─── Login con una sola contraseña (verificador, con doble vía anti-bloqueo) ───
+async function deriveVerifier(password, authSaltB64){
+  const salt = Uint8Array.from(atob(authSaltB64), c => c.charCodeAt(0));
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt, iterations:600000, hash:'SHA-256' }, km, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+// Tras un login normal, registra el verificador (derivado de la maestra) para la próxima vez.
+async function setupVerifierIfNeeded(master){
+  if (!master || !currentUsername) return;
+  try {
+    const info = await api('POST','/auth/salt',{ username: currentUsername });
+    if (info.hasVerifier) return;
+    const authSalt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+    const authVerifier = await deriveVerifier(master, authSalt);
+    await api('POST','/auth/setup-verifier',{ authSalt, authVerifier });
+  } catch(e) { console.warn('setup-verifier:', e && e.message); }
+}
+// Doble vía: intenta login con verificador (la contraseña ES la maestra); si falla o no
+// hay verificador, cae al login clásico (intacto) -> imposible quedar bloqueado.
+async function loginDualPath(username, password){
+  let salt;
+  try { salt = await api('POST','/auth/salt',{ username }); } catch { salt = { hasVerifier:false }; }
+  if (salt.hasVerifier && salt.authSalt) {
+    try {
+      const v = await deriveVerifier(password, salt.authSalt);
+      const data = await api('POST','/auth/login-verifier',{ username, authVerifier: v });
+      data._viaVerifier = true;
+      masterKey = password;                                  // la contraseña escrita ES la maestra
+      localStorage.setItem('vault_master_'+username, password);
+      return data;
+    } catch(_) { /* cae al login clásico (anti-bloqueo) */ }
+  }
+  const data = await api('POST','/auth/login',{ username, password });
+  const saved = localStorage.getItem('vault_master_'+username);
+  if (saved) masterKey = saved;
+  else {
+    const m = prompt('Ingresa tu contraseña maestra (encriptación local):');
+    if (m) { masterKey = m; localStorage.setItem('vault_master_'+username, m); }
+  }
+  return data;
+}
 async function authSubmit() {
   const username = document.getElementById('authUser').value.trim();
   const password = document.getElementById('authPass').value;
-  const master   = document.getElementById('authMaster').value;
   if (!username||!password){document.getElementById('authErr').textContent='Completa usuario y contraseña';return;}
-  if (currentTab==='register'&&!master){document.getElementById('authErr').textContent='Define tu contraseña maestra';return;}
-  if (currentTab==='register'&&master.length<8){document.getElementById('authErr').textContent='La contraseña maestra debe tener al menos 8 caracteres';return;}
+  if (currentTab==='register' && !passwordStrength(password).ok){document.getElementById('authErr').textContent='La contraseña debe ser robusta: mín. 12 con mayúscula, minúscula, número y símbolo';return;}
   const btn = document.getElementById('authBtn');
   btn.innerHTML='<span class="loading-spinner"></span>';btn.disabled=true;
   try {
-    const data = await api('POST','/auth/'+currentTab,{username,password});
+    let data;
+    if (currentTab==='register') {
+      data = await api('POST','/auth/register',{username,password});
+      masterKey = password;                                  // una sola contraseña (login = maestra)
+      localStorage.setItem('vault_master_'+username, password);
+    } else {
+      data = await loginDualPath(username, password);
+    }
     token = data.token;
     localStorage.setItem('vault_token',token);
     currentUsername = data.username;
-    if (currentTab==='register') {
-      masterKey = master;
-      localStorage.setItem('vault_master_'+username, master);
-    } else {
-      const saved = localStorage.getItem('vault_master_'+username);
-      if (saved) { masterKey = saved; }
-      else {
-        const m = prompt('Ingresa tu contraseña maestra (encriptación local):');
-        if (m) { masterKey=m; localStorage.setItem('vault_master_'+username,m); }
-      }
-    }
     pwPolicy = { maxAgeDays: data.passwordMaxAgeDays || 30, changedAt: data.passwordChangedAt || null };
-    if (currentTab === 'login' && data.mustChangePassword) { forcePasswordChange(password); return; }
+    // Cambio forzado solo en login clásico (ahí la contraseña SÍ es la de login)
+    if (currentTab === 'login' && data.mustChangePassword && !data._viaVerifier) { forcePasswordChange(password); return; }
     await _finishLogin(data.username);
   } catch(e){document.getElementById('authErr').textContent=e.message;}
   finally{btn.innerHTML=currentTab==='login'?'Entrar':'Crear cuenta';btn.disabled=false;}
@@ -1172,6 +1212,7 @@ async function _finishLogin(username){
   document.getElementById('appView').style.display = 'block';
   await syncAll();
   maybeShowPwExpiryBanner();
+  setupVerifierIfNeeded(masterKey);
 }
 function exportBackup(){
   try {
@@ -1197,9 +1238,8 @@ function exportBackup(){
 function suggestAuthPassword(){
   const pw = (typeof generatePassword === 'function') ? generatePassword() : '';
   if (!pw) return;
-  const p = document.getElementById('authPass'), m = document.getElementById('authMaster');
+  const p = document.getElementById('authPass');
   if (p) { p.value = pw; p.type = 'text'; }
-  if (m) { m.value = pw; m.type = 'text'; }
   toast('Contraseña sugerida — guárdala, la necesitarás para entrar');
 }
 function suggestNewPassword(){
