@@ -768,7 +768,7 @@
     <p id="pwModalMsg" style="color:var(--amber);font-size:13px;margin-bottom:1rem;line-height:1.5;display:none"></p>
     <div class="form-grid">
       <div class="form-group" id="pwCurrentWrap"><label class="form-label">Contraseña actual</label><input type="password" id="pwCurrent" placeholder="tu contraseña actual"></div>
-      <div class="form-group"><label class="form-label">Nueva contraseña</label><input type="password" id="pwNew" oninput="updatePwStrength()" placeholder="mínimo 12 caracteres"></div>
+      <div class="form-group"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center">Nueva contraseña <button type="button" onclick="suggestNewPassword()" style="background:transparent;border:none;color:var(--accent);font-size:11px;cursor:pointer;font-family:'JetBrains Mono',monospace">⚡ Sugerir segura</button></label><input type="password" id="pwNew" oninput="updatePwStrength()" placeholder="mínimo 12 caracteres"></div>
       <div class="strength-bar"><div class="strength-fill" id="pwStrengthFill" style="width:0%"></div></div>
       <div id="pwStrengthLabel" style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace"></div>
       <div class="form-group"><label class="form-label">Repetir nueva contraseña</label><input type="password" id="pwConfirm" placeholder="repite la nueva"></div>
@@ -1171,6 +1171,15 @@ async function _finishLogin(username){
   document.getElementById('appView').style.display = 'block';
   await syncAll();
   maybeShowPwExpiryBanner();
+}
+function suggestNewPassword(){
+  const pw = (typeof generatePassword === 'function') ? generatePassword() : '';
+  if (!pw) return;
+  const n = document.getElementById('pwNew'), c = document.getElementById('pwConfirm');
+  if (n) { n.value = pw; n.type = 'text'; }
+  if (c) { c.value = pw; c.type = 'text'; }
+  updatePwStrength();
+  toast('Contraseña sugerida — guárdala antes de continuar');
 }
 function openChangePassword(){
   _pwForced = false; _forcedCurrentPw = null;
